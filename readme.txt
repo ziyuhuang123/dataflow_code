@@ -1,5 +1,5 @@
 项目整体愿景：
-使用数据流方法，充分利用各级缓存，减少memory traffic带来的开销。针对memory bound问题。原先的缓存命中率较低，经过数据流方法之后能够显著提高。现在需要找到合适的使用场景。
+使用数据流方法，在减少sync 开销的同时，充分利用各级缓存，减少memory traffic带来的开销。针对memory bound问题。原先的缓存命中率较低，经过数据流方法之后能够显著提高。现在需要找到合适的使用场景。
 
 related work:
 TileFlow: A Framework for Modeling Fusion Dataflow via Tree-based Analysis
@@ -27,3 +27,8 @@ Chimera: An Analytical Optimizing Framework for Effective Compute-intensive Oper
 之前想探究最优的GEMM路径，为了寻找intuition，做了这个GUI，能够手动去计算每次的计算路径，然后显示出当前步的总的global memory access，并且能够回退到上一步。
 2. attention的哪部分是memory bound？
 attention一般有两个GEMM，我们先不考虑element-wise操作，那就是第一个GEMM比较memory bound。原因是，K维度很小，计算复用很少。而L2命中率一般是第二个GEMM更低，因为Q*K的中间结果很大，难以存到缓存上。
+
+下一步工作计划：
+测试不同参数下的memory bound和L2命中率情况。寻找合适场景进行实验。
+
+0522
