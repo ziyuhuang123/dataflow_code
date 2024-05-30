@@ -1,0 +1,2237 @@
+  # ================================================================================================
+  # GA100
+  # ================================================================================================
+  Items {
+    Filter: {
+      MinArch: CC_80
+      MaxArch: CC_80
+    }
+    RooflineChart {
+      Label: "Tensor Core Operations Roofline"
+      AxisIntensity {
+        Label: "Arithmetic Intensity [OP/byte]"
+      }
+      AxisWork {
+        Label: "Performance [OP/s]"
+      }
+      # -- Work:src_bf16_dst_fp32_sparsity_off  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_bf16_dst_fp32_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:bf16 Dst:fp32 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_bf16_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_bf16_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:bf16 Dst:fp32 Sparsity:off)"
+        }
+      }
+
+      # -- Work:src_bf16_dst_fp32_sparsity_on  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_bf16_dst_fp32_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:bf16 Dst:fp32 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_bf16_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_bf16_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:bf16 Dst:fp32 Sparsity:on)"
+        }
+      }
+
+      # -- Work:src_fp16_dst_fp16_sparsity_off  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:fp16 Dst:fp16 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:fp16 Dst:fp16 Sparsity:off)"
+        }
+      }
+
+      # -- Work:src_fp16_dst_fp16_sparsity_on  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:fp16 Dst:fp16 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:fp16 Dst:fp16 Sparsity:on)"
+        }
+      }
+      # -- Work:src_fp16_dst_fp16_sparsity_on  Traffic: L2 Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L2 Cache Bytes Accessible"
+              Name: "derived__lts__lts2xbar_bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L2 Cache Frequency"
+              Name: "lts__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L2 Cache Roofline (Src:fp16 Dst:fp16 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L2 Cache Bandwidth"
+            Name: "derived__lts__lts2xbar_bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L2 Cache Achieved Value (Src:fp16 Dst:fp16 Sparsity:on)"
+        }
+      }
+      # -- Work:src_fp16_dst_fp16_sparsity_on  Traffic: L1/TEX Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L1/TEX Cache Bytes Accessible"
+              Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L1/TEX Cache Frequency"
+              Name: "l1tex__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Roofline (Src:fp16 Dst:fp16 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L1/TEX Cache Bandwidth"
+            Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Achieved Value (Src:fp16 Dst:fp16 Sparsity:on)"
+        }
+      }
+      # -- Work:src_fp16_dst_fp32_sparsity_off  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:fp16 Dst:fp32 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:fp16 Dst:fp32 Sparsity:off)"
+        }
+      }
+      # -- Work:src_fp16_dst_fp32_sparsity_off  Traffic: L2 Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L2 Cache Bytes Accessible"
+              Name: "derived__lts__lts2xbar_bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L2 Cache Frequency"
+              Name: "lts__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L2 Cache Roofline (Src:fp16 Dst:fp32 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L2 Cache Bandwidth"
+            Name: "derived__lts__lts2xbar_bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L2 Cache Achieved Value (Src:fp16 Dst:fp32 Sparsity:off)"
+        }
+      }
+      # -- Work:src_fp16_dst_fp32_sparsity_off  Traffic: L1/TEX Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L1/TEX Cache Bytes Accessible"
+              Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L1/TEX Cache Frequency"
+              Name: "l1tex__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Roofline (Src:fp16 Dst:fp32 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L1/TEX Cache Bandwidth"
+            Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Achieved Value (Src:fp16 Dst:fp32 Sparsity:off)"
+        }
+      }
+      # -- Work:src_fp16_dst_fp32_sparsity_on  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:fp16 Dst:fp32 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:fp16 Dst:fp32 Sparsity:on)"
+        }
+      }
+      # -- Work:src_fp16_dst_fp32_sparsity_on  Traffic: L2 Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L2 Cache Bytes Accessible"
+              Name: "derived__lts__lts2xbar_bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L2 Cache Frequency"
+              Name: "lts__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L2 Cache Roofline (Src:fp16 Dst:fp32 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L2 Cache Bandwidth"
+            Name: "derived__lts__lts2xbar_bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L2 Cache Achieved Value (Src:fp16 Dst:fp32 Sparsity:on)"
+        }
+      }
+      # -- Work:src_fp16_dst_fp32_sparsity_on  Traffic: L1/TEX Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L1/TEX Cache Bytes Accessible"
+              Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L1/TEX Cache Frequency"
+              Name: "l1tex__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Roofline (Src:fp16 Dst:fp32 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L1/TEX Cache Bandwidth"
+            Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Achieved Value (Src:fp16 Dst:fp32 Sparsity:on)"
+        }
+      }
+      # -- Work:src_fp64  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_fp64.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:fp64)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp64.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp64.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:fp64)"
+        }
+      }
+      # -- Work:src_fp64  Traffic: L2 Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_fp64.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L2 Cache Bytes Accessible"
+              Name: "derived__lts__lts2xbar_bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L2 Cache Frequency"
+              Name: "lts__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L2 Cache Roofline (Src:fp64)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp64.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp64.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L2 Cache Bandwidth"
+            Name: "derived__lts__lts2xbar_bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L2 Cache Achieved Value (Src:fp64)"
+        }
+      }
+      # -- Work:src_fp64  Traffic: L1/TEX Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_fp64.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L1/TEX Cache Bytes Accessible"
+              Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L1/TEX Cache Frequency"
+              Name: "l1tex__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Roofline (Src:fp64)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp64.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_fp64.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L1/TEX Cache Bandwidth"
+            Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Achieved Value (Src:fp64)"
+        }
+      }
+      # -- Work:src_int1  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int1.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:int1)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int1.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int1.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:int1)"
+        }
+      }
+      # -- Work:src_int1  Traffic: L2 Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int1.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L2 Cache Bytes Accessible"
+              Name: "derived__lts__lts2xbar_bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L2 Cache Frequency"
+              Name: "lts__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L2 Cache Roofline (Src:int1)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int1.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int1.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L2 Cache Bandwidth"
+            Name: "derived__lts__lts2xbar_bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L2 Cache Achieved Value (Src:int1)"
+        }
+      }
+      # -- Work:src_int1  Traffic: L1/TEX Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int1.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L1/TEX Cache Bytes Accessible"
+              Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L1/TEX Cache Frequency"
+              Name: "l1tex__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Roofline (Src:int1)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int1.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int1.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L1/TEX Cache Bandwidth"
+            Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Achieved Value (Src:int1)"
+        }
+      }
+      # -- Work:src_int4_sparsity_off  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:int4 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:int4 Sparsity:off)"
+        }
+      }
+      # -- Work:src_int4_sparsity_off  Traffic: L2 Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L2 Cache Bytes Accessible"
+              Name: "derived__lts__lts2xbar_bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L2 Cache Frequency"
+              Name: "lts__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L2 Cache Roofline (Src:int4 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L2 Cache Bandwidth"
+            Name: "derived__lts__lts2xbar_bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L2 Cache Achieved Value (Src:int4 Sparsity:off)"
+        }
+      }
+      # -- Work:src_int4_sparsity_off  Traffic: L1/TEX Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L1/TEX Cache Bytes Accessible"
+              Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L1/TEX Cache Frequency"
+              Name: "l1tex__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Roofline (Src:int4 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L1/TEX Cache Bandwidth"
+            Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Achieved Value (Src:int4 Sparsity:off)"
+        }
+      }
+      # -- Work:src_int4_sparsity_on  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:int4 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:int4 Sparsity:on)"
+        }
+      }
+      # -- Work:src_int4_sparsity_on  Traffic: L2 Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L2 Cache Bytes Accessible"
+              Name: "derived__lts__lts2xbar_bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L2 Cache Frequency"
+              Name: "lts__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L2 Cache Roofline (Src:int4 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L2 Cache Bandwidth"
+            Name: "derived__lts__lts2xbar_bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L2 Cache Achieved Value (Src:int4 Sparsity:on)"
+        }
+      }
+      # -- Work:src_int4_sparsity_on  Traffic: L1/TEX Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L1/TEX Cache Bytes Accessible"
+              Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L1/TEX Cache Frequency"
+              Name: "l1tex__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Roofline (Src:int4 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int4_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L1/TEX Cache Bandwidth"
+            Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Achieved Value (Src:int4 Sparsity:on)"
+        }
+      }
+      # -- Work:src_int8_sparsity_off  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:int8 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:int8 Sparsity:off)"
+        }
+      }
+      # -- Work:src_int8_sparsity_off  Traffic: L2 Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L2 Cache Bytes Accessible"
+              Name: "derived__lts__lts2xbar_bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L2 Cache Frequency"
+              Name: "lts__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L2 Cache Roofline (Src:int8 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L2 Cache Bandwidth"
+            Name: "derived__lts__lts2xbar_bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L2 Cache Achieved Value (Src:int8 Sparsity:off)"
+        }
+      }
+      # -- Work:src_int8_sparsity_off  Traffic: L1/TEX Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L1/TEX Cache Bytes Accessible"
+              Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L1/TEX Cache Frequency"
+              Name: "l1tex__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Roofline (Src:int8 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L1/TEX Cache Bandwidth"
+            Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Achieved Value (Src:int8 Sparsity:off)"
+        }
+      }
+      # -- Work:int8_sparsity_on  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:int8 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:int8 Sparsity:on)"
+        }
+      }
+      # -- Work:int8_sparsity_on  Traffic: L2 Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L2 Cache Bytes Accessible"
+              Name: "derived__lts__lts2xbar_bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L2 Cache Frequency"
+              Name: "lts__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L2 Cache Roofline (Src:int8 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L2 Cache Bandwidth"
+            Name: "derived__lts__lts2xbar_bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L2 Cache Achieved Value (Src:int8 Sparsity:on)"
+        }
+      }
+      # -- Work:int8_sparsity_on  Traffic: L1/TEX Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L1/TEX Cache Bytes Accessible"
+              Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L1/TEX Cache Frequency"
+              Name: "l1tex__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Roofline (Src:int8 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_int8_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L1/TEX Cache Bandwidth"
+            Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Achieved Value (Src:int8 Sparsity:on)"
+        }
+      }
+      # -- Work:src_tf32_dst_fp32_sparsity_off  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:tf32 Dst:fp32 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:tf32 Dst:fp32 Sparsity:off)"
+        }
+      }
+      # -- Work:src_tf32_dst_fp32_sparsity_off  Traffic: L2 Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L2 Cache Bytes Accessible"
+              Name: "derived__lts__lts2xbar_bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L2 Cache Frequency"
+              Name: "lts__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L2 Cache Roofline (Src:tf32 Dst:fp32 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L2 Cache Bandwidth"
+            Name: "derived__lts__lts2xbar_bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L2 Cache Achieved Value (Src:tf32 Dst:fp32 Sparsity:off)"
+        }
+      }
+      # -- Work:src_tf32_dst_fp32_sparsity_off  Traffic: L1/TEX Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_off.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L1/TEX Cache Bytes Accessible"
+              Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L1/TEX Cache Frequency"
+              Name: "l1tex__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Roofline (Src:tf32 Dst:fp32 Sparsity:off)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_off.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L1/TEX Cache Bandwidth"
+            Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Achieved Value (Src:tf32 Dst:fp32 Sparsity:off)"
+        }
+      }
+      # -- Work:src_tf32_dst_fp32_sparsity_on  Traffic: DRAM -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical DRAM Bytes Accessible"
+              Name: "dram__bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "DRAM Frequency"
+              Name: "dram__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "DRAM Roofline (Src:tf32 Dst:fp32 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "DRAM Bandwidth"
+            Name: "dram__bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "DRAM Achieved Value (Src:tf32 Dst:fp32 Sparsity:on)"
+        }
+      }
+      # -- Work:src_tf32_dst_fp32_sparsity_on  Traffic: L2 Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L2 Cache Bytes Accessible"
+              Name: "derived__lts__lts2xbar_bytes.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L2 Cache Frequency"
+              Name: "lts__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L2 Cache Roofline (Src:tf32 Dst:fp32 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L2 Cache Bandwidth"
+            Name: "derived__lts__lts2xbar_bytes.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L2 Cache Achieved Value (Src:tf32 Dst:fp32 Sparsity:on)"
+        }
+      }
+      # -- Work:src_tf32_dst_fp32_sparsity_on  Traffic: L1/TEX Cache -----------------------------------------
+      Rooflines {
+        PeakWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical Tensor Operations"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_on.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        PeakTraffic {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Theoretical L1/TEX Cache Bytes Accessible"
+              Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.peak_sustained"
+            }
+            CyclesPerSecondMetric {
+              Label: "L1/TEX Cache Frequency"
+              Name: "l1tex__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Roofline (Src:tf32 Dst:fp32 Sparsity:on)"
+          ShowOnlyIfNotZero {
+            Metric {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+          }
+        }
+      }
+      AchievedValues {
+        AchievedWork {
+          ValueCyclesPerSecondExpression {
+            ValuePerCycleMetrics {
+              Label: "Tensor Operations Per Cycle"
+              Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_on.sum.per_cycle_elapsed"
+            }
+            CyclesPerSecondMetric {
+              Label: "SM Frequency"
+              Name: "sm__cycles_elapsed.avg.per_second"
+            }
+          }
+        }
+        AchievedTraffic {
+          Metric {
+            Label: "L1/TEX Cache Bandwidth"
+            Name: "derived__l1tex__lsu_writeback_bytes_mem_lg.sum.per_second"
+          }
+        }
+        Options {
+          Label: "L1/TEX Cache Achieved Value (Src:tf32 Dst:fp32 Sparsity:on)"
+        }
+      }
+    }
+  }
+  Items {
+    Filter: {
+      MinArch: CC_80
+      MaxArch: CC_80
+    }
+    SuffixTable: {
+      Suffixes {
+        Suffix {
+          Label: "# Operations"
+          Name: ".sum"
+        }
+        Suffix {
+          Label: "# Operations / Cycle"
+          Name: ".sum.per_cycle_elapsed"
+        }
+        Suffix {
+          Label: "# Operations / s"
+          Name: ".sum.per_second"
+        }
+        Suffix {
+          Label: "Peak %"
+          Name: ".sum.pct_of_peak_sustained_elapsed"
+        }
+        Suffix {
+          Label: "Peak Operations / Cycle"
+          Name: ".sum.peak_sustained"
+        }
+        Suffix {
+          Label: "Peak Operations / s"
+          Name: ".sum.peak_sustained_elapsed.per_second"
+        }
+      }
+      BaseNames {
+        BaseName {
+          Label: "Src:bf16 Dst:fp32 Sparsity:off"
+          Name: "sm__ops_path_tensor_src_bf16_dst_fp32_sparsity_off"
+        }
+        BaseName {
+          Label: "Src:bf16 Dst:fp32 Sparsity:on"
+          Name: "sm__ops_path_tensor_src_bf16_dst_fp32_sparsity_on"
+        }
+        BaseName {
+          Label: "Src:fp16 Dst:fp16 Sparsity:off"
+          Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_off"
+        }
+        BaseName {
+          Label: "Src:fp16 Dst:fp16 Sparsity:on"
+          Name: "sm__ops_path_tensor_src_fp16_dst_fp16_sparsity_on"
+        }
+        BaseName {
+          Label: "Src:fp16 Dst:fp32 Sparsity:off"
+          Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_off"
+        }
+        BaseName {
+          Label: "Src:fp16 Dst:fp32 Sparsity:on"
+          Name: "sm__ops_path_tensor_src_fp16_dst_fp32_sparsity_on"
+        }
+        BaseName {
+          Label: "Src:fp64"
+          Name: "sm__ops_path_tensor_src_fp64"
+        }
+        BaseName {
+          Label: "Src:int1"
+          Name: "sm__ops_path_tensor_src_int1"
+        }
+        BaseName {
+          Label: "Src:int4 Sparsity:off"
+          Name: "sm__ops_path_tensor_src_int4_sparsity_off"
+        }
+        BaseName {
+          Label: "Src:int4 Sparsity:on"
+          Name: "sm__ops_path_tensor_src_int4_sparsity_on"
+        }
+        BaseName {
+          Label: "Src:int8 Sparsity:off"
+          Name: "sm__ops_path_tensor_src_int8_sparsity_off"
+        }
+        BaseName {
+          Label: "Src:int8 Sparsity:on"
+          Name: "sm__ops_path_tensor_src_int8_sparsity_on"
+        }
+        BaseName {
+          Label: "Src:tf32 Dst:fp32 Sparsity:off"
+          Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_off"
+        }
+        BaseName {
+          Label: "Src:tf32 Dst:fp32 Sparsity:on"
+          Name: "sm__ops_path_tensor_src_tf32_dst_fp32_sparsity_on"
+        }
+      }
+    }
+  }
