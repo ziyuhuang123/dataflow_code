@@ -2,11 +2,23 @@
 使用数据流方法，在减少sync 开销的同时，充分利用各级缓存，减少memory traffic带来的开销。针对memory bound问题。原先的缓存命中率较低，经过数据流方法之后能够显著提高。现在需要找到合适的使用场景。
 
 related work:
+
 TileFlow: A Framework for Modeling Fusion Dataflow via Tree-based Analysis
-A Framework for Fine-Grained Synchronization of Dependent GPU Kernels
+Cusync: A Framework for Fine-Grained Synchronization of Dependent GPU Kernels
+
 Welder: Scheduling Deep Learning Memory Access via Tile-graph
+
 Chimera: An Analytical Optimizing Framework for Effective Compute-intensive Operators Fusion
 
+Souffle: Optimizing Deep Learning Inference via Global Analysis and Tensor Expressions
+
+| Framework | baseline                                                                            |
+|-----------|-------------------------------------------------------------------------------------|
+| TileFlow  |                     |
+| Cusync |                |
+| Welder    |                            |
+| Chimera   |  |
+| Souffle   | Bert等。。       |
 
 
 0512
