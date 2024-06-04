@@ -19,7 +19,8 @@ Souffle: Optimizing Deep Learning Inference via Global Analysis and Tensor Expre
 | Welder    |                            |
 | Chimera   |  |
 | Souffle   | Bert等。。       |
-
+| Optimus   |        |
+| MASTRO   |        |
 
 0512
 1. 今天写了GUI，能够设定矩阵乘法的MNK尺寸，cache的大小。每次点击方框能够计算当前cache内的值和截至目前的global memory access。并且有undo按钮回撤到上一步。作用是帮助理解为什么不同Z字形的memory access不一样，想获得某种intuition。
@@ -43,4 +44,50 @@ attention一般有两个GEMM，我们先不考虑element-wise操作，那就是�
 下一步工作计划：
 测试不同参数下的memory bound和L2命中率情况。寻找合适场景进行实验。
 
-0522
+0604
+关于L2数据流的一些思考：
+1. 为了优先利用中间结果，GEMM0的一行算完之后立刻执行GEMM1的对应的一行
+2. 由于FFN的形状，GEMM1的宽度较小，所以选择一次走完GEMM1的一行，而不切分。（如果切分，那么就无法享受中间结果了，就彻底丢到最后面再处理）
+3. 由于依赖关系，GEMM1不存在hilbert式回环走法
+4. GEMM1的值算完存回DRAM，然后再读上来再加。这可能造成一点额外开销。。
+5. 但是考虑到残差结构，尽快算完GEMM0和GEMM1的一整行是有利的，这样输入的A还能尽可能留在L2，也就是说Z字形的纵向的高矮不要太高
+6. 也应该用global memory access来衡量性能
+7. 考虑到attention的残差结构，不应该在attention没算完，就把中间结果拿来算FFN。也就是说，attention和FFN的L2数据流是分开的。
+
+
+
+paper 阅读思考：
+
+卷积加速器中的通信下界
+
+take away：
+1. 数据流。。能加速，是不是也可以找数据额外流动带来的能量消耗？（这个肯定要做）
+2. 我需要的数据流不仅是GEMM。。而应该是transformer架构下的多个kernel的综合设计。怎么理论上分析找到多个kernel的最小通信量？（可以用红蓝卵石方法吗？）优化空间有多大呢？
+3. 加速器常用global SRAM buffer，然而GPU进行了切分。
+
+```
+话说为什么GPU的shared memory是每个SM内部的，而加速器往往是全局连起来的啊？
+
+主要原因。。我猜是因为全局连起来的传输速度会很慢？比如SM0要访问存在SM107的shared memory的值。。
+```
+
+在局部切分情况下，最优通信是多少？（COSMA已经论证了）
+如果全局连通，考虑上远距离访问的开销，数据怎么放置是最优的？（这个问题好像有点远）
+
+
+我好像可以做kernel间L2数据流，然后选择A40，大M。然后不使用cutlass的swizzle。因为我们做的是kernel间。。。有点tricky，但是好像也可以。
+
+
+缺点：
+5. 本文对片上通信的操作基本没有做优化，只是用了GEMM的常规blocking操作而已。
+7. 真的需要单独的CNN架构吗。。。GPU也可以吧。。只是想证明在不同配置上都能够达到最小访存量的话，其实GPU-sim也足够了？
+8. 我看L2 throughput还没有拉满。。每次是循环到需要值的时候，才从DRAM读值。能不能一开始就制定好哪些值需要，然后一直连续不停的最大功率从DRAM读到L2（可以。。但是目前L2命中率都那么高了，明显不是bound。。。）
+9. 本文。。也没有如其所说，对给定的硬件配置，选择合理的参数啊？甚至连最优tile size都没讨论。。
+
+
+现在想想看两个GEMM的数据流，能不能用红蓝卵石方法得到通信下界？（L2上）
+
+明天的工作计划：
+看论文
+leanAttention，对比其与flash的区别
+graphneIR，找到我的计算方法的表达
