@@ -1,0 +1,113 @@
+Optimus
+1. e2e融合kernel。中间结果存在哪？能全部存下吗？（decoding的中间结果很小，好像是可以的。）
+2. 文章所解决的问题是现有加速器的乘法单元的利用率不足。。但是这个真的是bound吗。。decoding我记得是卡在对K_cache的读取上，现在有解决吗？没看到。。（decoding情况下的attention到底时间占比如何？KV cache会bound到什么程度？）（去验证KVcache到底对时间的bound到底有多大）
+3. 解决结构冒险？只是因为swiglu-FFN的特殊结构而已吧？如果依然是GEMM-SILU-GEMM，怎么解决？（比如图7的第四步）-->对我的启发，特殊函数/tensor core/cuda core能不能真正的异步起来？反正我也要修改硬件，不如改成彻底异步
+4. 没有解释清楚哪个GEMM用OS还是IS，为什么一定要有OS->IS或者反过来的操作？就不能一直是OS吗？
+
+```
+GPU是一个典型的非GEMM内核在实现不当时遭受性能问题的例子。我们识别了GPU内核中潜在的结构和数据冒险。例如，耗时最多的三个内核是RMSNorm内核。一个主要原因可能是归一化中的归约操作引起的显著结构冒险，这是在GPU SIMD架构上研究良久且不适合的[43]。另一个因素可能来自GPU中的除法操作，其中SiLU和逐元素乘积（EW Product）计算也表现出类似的现象。如图8所示，EW Product（仅包含一次乘法和两个输入）的速度约为11.4微秒，是SiLU = xσ(x)（19.3微秒）速度的两倍，其中σ代表Sigmoid函数[46]。值得注意的是，σ(x)中只有一次除法操作。为了证实这些发现，我们通过实现CUDA内核对SiLU和EW Product进行了额外实验，结果显示出图8中的一致延迟趋势。随后，在消除SiLU中的除法操作后，其延迟突然与EW Product一致，表明GPU对除法的支持也不好。这些实验强调了GPU面临的结构冒险，占总延迟的40％，特别是在处理极小计算时。此外，几乎所有内核都易受数据冒险的影响，导致GEMV内核的30％开销，这通过进一步的非融合内核实验得出。
+```
+
+GPU上，element操作居然能占40%吗？数据冒险。。占30%！？这很有优化空间。。(我再确认一下！）
+
+5. 这两种冒险的解决方案应该是数据流，同时让不同的操作并行的跑起来。。为了实现这一点，不需要抛弃GPU架构，只需要修改即可：
+
+----特殊函数/tensor core/cuda core能不能真正的异步起来（两种异步：另一种是，同一个SM同一个block内，两个worker，时间上相差一个stage，充分利用硬件资源）
+----共享内存尽可能多的连起来（在H100上比较实用DSMEM和不用的不同设计，展现优化性能）
+
+
+学长意见：
+1. design只能为这个场景服务。是不是decoding真的占那么高。反例：很容易找。
+2. decoding为延迟比较大，可以用数据流来细粒度的解决。
+3. 把Optimus放到GPU上，会遇到什么新的挑战吗？1. 怎么实现数据流。2. block发射顺序。3. tensor core/cuda core能不能真正的异步
+
+
+卷积加速器中的通信下界
+
+take away：
+1. 数据流。。能加速，是不是也可以找数据额外流动带来的能量消耗？（这个肯定要做）（MASTRO和本文都是这个motivation）
+2. 我需要的数据流不仅是GEMM。。而应该是transformer架构下的多个kernel的综合设计。怎么理论上分析找到多个kernel的最小通信量？（可以用红蓝卵石方法吗？）优化空间有多大呢？
+3. 加速器常用global SRAM buffer，然而GPU进行了切分。
+
+```
+话说为什么GPU的shared memory是每个SM内部的，而加速器往往是全局连起来的啊？
+
+主要原因。。我猜是因为全局连起来的传输速度会很慢？比如SM0要访问存在SM107的shared memory的值。。
+```
+
+在局部切分情况下，最优通信是多少？（COSMA已经论证了）
+如果全局连通，考虑上远距离访问的开销，数据怎么放置是最优的？（这个问题好像有点远）
+
+
+我好像可以做kernel间L2数据流，然后选择A40，大M。然后不使用cutlass的swizzle。因为我们做的是kernel间。。。有点tricky，但是好像也可以。
+
+
+缺点：
+5. 本文对片上通信的操作基本没有做优化，只是用了GEMM的常规blocking操作而已。
+7. 真的需要单独的CNN架构吗。。。GPU也可以吧。。只是想证明在不同配置上都能够达到最小访存量的话，其实GPU-sim也足够了？
+8. 我看L2 throughput还没有拉满。。每次是循环到需要值的时候，才从DRAM读值。能不能一开始就制定好哪些值需要，然后一直连续不停的最大功率从DRAM读到L2（可以。。但是目前L2命中率都那么高了，明显不是bound。。。）
+9. 本文。。也没有如其所说，对给定的硬件配置，选择合理的参数啊？甚至连最优tile size都没讨论。。
+
+
+
+现在想想看两个GEMM的数据流，能不能用红蓝卵石方法得到通信下界？（L2上）
+---->对于cache，本文没有讨论。对于buffer，目前的方法已经是最优了。（如果一个SM是最大的一个block比如256*128的话）
+对于cache，最优策略被证明是NP-hard，不过对于GEMM也许可以找到下界。。。（暂时没想明白。。也没查到论文）
+
+我好像可以做kernel间L2数据流，然后选择A40，大M。然后不使用cutlass的swizzle。因为我们做的是kernel间。。。有点tricky，但是好像也可以。
+
+
+1. 为了优先利用中间结果，GEMM0的一行算完之后立刻执行GEMM1的对应的一行
+2. 由于FFN的形状，GEMM1的宽度较小，所以选择一次走完GEMM1的一行，而不切分。（如果切分，那么就无法享受中间结果了，就彻底丢到最后面再处理）
+3. 由于依赖关系，GEMM1不存在hilbert式回环走法
+4. GEMM1的值算完存回DRAM，然后再读上来再加。这可能造成一点额外开销。。
+5. 但是考虑到残差结构，尽快算完GEMM0和GEMM1的一整行是有利的，这样输入的A还能尽可能留在L2，也就是说Z字形的纵向的高矮不要太高
+6. 也应该用global memory access来衡量性能
+7. 考虑到attention的残差结构，不应该在attention没算完，就把中间结果拿来算FFN。也就是说，attention和FFN的L2数据流是分开的。
+
+8. 我的模拟分为memory/compute相互覆盖，和总global memory access的计算。当然也可以放到一起。
+
+A40上的flash是compute bound 而FFN是memory bound。如果所有block都算FFN那么带宽压力很大，有的需要等待，不如部分在算flash，部分在算FFN。
+
+
+128*32*2/7.4=1107cycle~350
+128*32*2/17.6=465cycle~193
+
+
+A100 tensor core m16n16k16(wmma, ptx拼接了两个m16n8k16)
+latency: 16 cycles
+bandwidth: 220B/cycle
+
+memory:	latency(cycle)   	bandwidth(B/cycle/SM)
+global	290		11.84
+L2	200		47.41
+
+290+3
+
+比如128*16和256*16的数据量，使用half。在L2里面命中了。然后计算这么多，需要使用m16n16k16的指令多少次？（这每一次都需要一个tensor core的latency吗？还是只有第一次需要？）那么计算是多少cycle？
+然后只看L2到shared memory，这需要多少cycle？
+
+
+
+以下讨论针对A100：
+假设我要算m=256 n=128 k=16的矩阵，用half格式，m16n16k16的wmma指令。
+1. 计算时长：根据论文1，这个指令需要16个cycle。m/16 * n/16=128次。所以是16*128=2048个cycle。
+单个tensor core就可以执行这个指令。一个SM有四个TC，所以2048/4=512cycle，一个SM就可以计算完成。
+2. 若L2 hit：论文1,2指出，L2延迟为200cycle，bandwidth为5120 Bytes/clk/108SM=47.41B/cycle/SM，若数据在L2上命中，则取到SM的总时长为200+(256*16+128*16)*2/47.41=459.19
+3. 若L2 miss：如果发生L2 miss，则还要加上全局内存读取，为latency+时间=290+(256*16+128*16)*2/11.84=1327.84。则再加上L2的开销，那就是1786cycle。
+
+请问上述计算对么？
+
+论文1：Demystifying the Nvidia Ampere Architecture through Microbenchmarking and Instruction-level Analysis
+论文2：NVIDIA A100 Tensor Core GPU Architecture
+
+
+OSDI23论文的transaction cache的问题-->我的目标是总kernel时长最小，不一定是要当前的L2命中率最高
+问题：为什么NCU的DRAM 达不到峰值？就是因为在不同分区吗？
+所以说，我的目标应该是提高：对一个block计算，A和B都在L2，而不是整体来看在L2的概率？（能得到这样的结论吗？）
+
+
+根据我的策略，L1也只能是对GEMM1左侧的一些列起作用，但是这样也可以和L2结合起来。。
+对于FFN，我有点不知道怎么融两个GEMM，因为迭代次数不一样，对于两个worker的工作量是不平衡的。。。除非有32个worker算GEMM0，中间结果一直存着，一个worker算GEMM1。。。中间结果一直存的空间占用就太大了。。
+FFN的没法用数据流L1，只能用flash attention那种方法。。。
+4. 在H20上我可以尝试tensor core的异步。在A100上我能够在attention的GEMM0-worker做softmax时，GEMM1用tensor core。（那么我还需要去查flash的tensor core利用率）
