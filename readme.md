@@ -129,3 +129,29 @@ graphneIR，找到我的计算方法的表达
 2. 简要阐述两篇paper看到了啥（文字即可）
 3. 下周工作计划：尽快写代码（以及，冷老师希望L2数据流之类的先不要写模拟器找理论最优什么的，还是实测，要在GPU上拿到提升）
 4. 问：要看flash attention吗？是不是大致搞明白怎么回事即可？全看懂好困难啊。。。（还是要硬啃的）
+5. motivation：计算能力增长远快于内存速度增长（图来自冷老师的slide），memory wall优化是HPC的重要问题
+6. CNN多了一个数据复用的维度，说不定优化空间更大？有时间可以看看：
+“openai有一个开源的CLIP，有两种开源的backbone，一种实现是RESNET，另一种是ViT吧，大概是这样。。那个基于resnet的就是CNN”
+“cnn based SD”
+“在资源受限的边缘场景下还是会用CNN的，比如工厂的自动探测摄像头，就用resnet那种。大模型下面，那还是transformer占主导吧”
+总之，也可以搞，但是好像意义不是特别大。
+
+
+0608
+1. 研究清楚decoding下的矩阵乘法GEMM/GEMV到底怎么写的
+
+引用自《Flash Decoding++》：
+
+> GEMV工作负载可以通过利用FastGEMV等先前设计中的CUDA Core来优化。对于解码阶段的Llama2-7B线性层，cuBLAS的张量核心实现仅达到在NVIDIA A100 GPU上使用FastGEMV的CUDA Core实现的82.15%的性能。另一方面，与张量核心实现相比，使用CUDA Core在batchsize=4的解码输入上进行投影仅达到49.75%的性能。
+
+所以为了方便，我可以选batch=16，用cutlass/tensor core。
+
+3. 测flash decoding并理解其细节，对比。
+
+
+0611
+
+1. 测试后发现对于M=16，N=14336（或乘10以确保wave足够多），K=4096，使用block_size=(128,256)并不比(64,....)要慢。实验在A40上测的很多，A100上稍微测了下。这保证了我可以使用大block，来和flash进行融合
+2. 吐槽cusync的不足：使用多个stream，无法控制block的先后，对cutlass则必须使用cutlass::gemm::threadblock::CuSyncGemmHorizontalThreadblockSwizzle，这损害了L2的性能（虽然还没测其具体L2性能。。。）
+3. 对于两个GEMM的执行顺序，可以算GEMM0的一行的一半，就立刻去算GEMM1的对应一行；可以尽快算完GEMM0的一行，然后就跑去算GEMM1的对应一行；可以算完GEMM0的好几行，然后再去算GEMM1的对应几行。
+4. 修改cutlass的输入参数。现在我还需要输入D。判断，如果是consumer，就使用C和D，如果是producer就使用A和B。sync的方法暂时先不管。研究cutlass里面的block是二维的？执行顺序如何？
