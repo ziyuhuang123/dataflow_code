@@ -155,3 +155,45 @@ graphneIR，找到我的计算方法的表达
 2. 吐槽cusync的不足：使用多个stream，无法控制block的先后，对cutlass则必须使用cutlass::gemm::threadblock::CuSyncGemmHorizontalThreadblockSwizzle，这损害了L2的性能（虽然还没测其具体L2性能。。。）
 3. 对于两个GEMM的执行顺序，可以算GEMM0的一行的一半，就立刻去算GEMM1的对应一行；可以尽快算完GEMM0的一行，然后就跑去算GEMM1的对应一行；可以算完GEMM0的好几行，然后再去算GEMM1的对应几行。
 4. 修改cutlass的输入参数。现在我还需要输入D。判断，如果是consumer，就使用C和D，如果是producer就使用A和B。sync的方法暂时先不管。研究cutlass里面的block是二维的？执行顺序如何？
+
+0612
+1. 研究cusync-cutlass内的代码，相互的关系如何？（从而找到如何加入input D）
+2. cusync-cutlass文件夹底下的文件结构，相互依赖的关系：
+3. 
+gemm/
+- device/
+  - cusyncgemm.h
+- kernel/
+  - cusyncgemm.h
+  - default_cusyncgemm.h
+- threadblock/
+  - cusync_threadblock_swizzle.h
+  - cusyncmma_multistage.h
+  - cusyncmma_pipelined.h
+  - default_cusyncmma.h
+
+在device/cusyncgemm.h里定义了两个class cusyncgemm，后者是对前者在columnMajor情况下的特化，暂时不管。
+cusyncgemm引用了kernel/default_cusyncgemm.h来实例化自己。而kernel/default_cusyncgemm.h又引用了kernel/cusyncgemm.h。
+
+
+### **kernel/default_cusyncgemm.h包含以下内容：**  
+/// Partial specialization for Hopper Architecture  
+/// Partial specialization for Ampere Architecture  
+/// Partial specialization for Turing Architecture     
+/// Partial specialization for Ampere Integer Matrix Multiply Interleaved layout  
+/// Partial specialization for Turing Integer Matrix Multiply Interleaved layout  
+/// Partial specialization for Volta architecture  
+/// Partial specialization for SIMT  
+/// Partial specialization for Ampere  
+/// Partial specialization for SIMT DP4A  
+/// Partial specialization for Wmma Gemm Kernel  
+
+这里面基本都差不多，只是在模板里面的arch参数不一样而已。每个struct内最后一行是using GemmKernel = kernel::CuSyncGemm<CuStageImpl, Mma, Epilogue, ThreadblockSwizzle, SplitKSerial>;
+而这就进入了kernel/cusyncgemm.h
+
+### kernel/cusyncgemm.h包含以下内容
+
+
+
+
+### **每个文件在哪里体现了cusync？**
