@@ -159,7 +159,6 @@ graphneIR，找到我的计算方法的表达
 0612
 1. 研究cusync-cutlass内的代码，相互的关系如何？（从而找到如何加入input D）
 2. cusync-cutlass文件夹底下的文件结构，相互依赖的关系：
-3. 
 gemm/
 - device/
   - cusyncgemm.h
@@ -192,8 +191,15 @@ cusyncgemm引用了kernel/default_cusyncgemm.h来实例化自己。而kernel/def
 而这就进入了kernel/cusyncgemm.h
 
 ### kernel/cusyncgemm.h包含以下内容
+执行GEMM的主要内容。里面的semaphore不用管，那就是splitK和cutlass原生带有的东西。但是关注其中的custage.的内容。
 
 
+明天想明白：
+1. custage.post是怎么工作的？为什么要if consumer?-->怎么工作的暂时不管。原先就可以if consumer。custage.wait藏在mma里面
+2. 那段代码里，执行mma的在哪里？-->找到了
 
 
-### **每个文件在哪里体现了cusync？**
+1. 去研究cutlass的swizzle是怎么实现的？确定是Z字形吗？
+
+0613
+如文件夹block_swizzle里所述，那是在3050 laptop上测的，figure1明显表明了1d情况下block发射顺序和idx.x完全正相关。明天要考虑，cutlass的swizzle是在2d情况下实现的，这是不是对我的融合造成了阻碍？或者。。能不能只在z维度上进行调整？

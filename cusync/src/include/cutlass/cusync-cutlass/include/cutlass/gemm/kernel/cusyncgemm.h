@@ -42,6 +42,8 @@
 #include "cutlass/semaphore.h"
 #include "cutlass/arch/arch.h"
 
+#include <stdio.h>
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass {
@@ -219,6 +221,12 @@ struct CuSyncGemm {
     cutlass::gemm::GemmCoord threadblock_tile_offset =
         threadblock_swizzle.get_tile_offset(params.swizzle_log_tile, block_idx_x, block_idx_y, block_idx_z);
 
+    // if(threadIdx.x == 0&&threadIdx.y == 0&&threadIdx.z == 0){
+    //   printf("blockIdx.x: %d, blockIdx.y: %d, blockIdx.z: %d | GemmCoord: m = %d, n = %d, k = %d\n",
+    //             blockIdx.x, blockIdx.y, blockIdx.z,
+    //             threadblock_tile_offset.m(), threadblock_tile_offset.n(), threadblock_tile_offset.k());
+    // }
+
     // We do not need this anymore 
     // Early exit if CTA is out of range
     // if (params.grid_tiled_shape.m() <= threadblock_tile_offset.m() ||
@@ -289,7 +297,7 @@ struct CuSyncGemm {
       } else {
         mma.doWithOverlap(gemm_k_iterations, accumulators, iterator_A, iterator_B, accumulators,
                           stage, tb_offset_A, tb_offset_B, block_idx_x, block_idx_y);
-      }
+      } // custage.wait藏在mma里面。而这个要去threadblock文件里面去找
     }
 
     //

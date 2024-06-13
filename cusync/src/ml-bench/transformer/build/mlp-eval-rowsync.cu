@@ -1006,28 +1006,28 @@ int run(int argc, char* argv[]) {
     printf("END-BASELINE:\n");
     printf("Average time %lf microseconds\n", baselineTime/(float)epochs);
   } else if (mlpParams.isLLaMa()) {
-    result = runBaselineLLaMA(split_k1, split_k2, mlpParams, producer_stream, 
-                              producer_stream2, baselineTime, matmul1Time, softmaxTime, matmul2Time, 1);
+    // result = runBaselineLLaMA(split_k1, split_k2, mlpParams, producer_stream, 
+    //                           producer_stream2, baselineTime, matmul1Time, softmaxTime, matmul2Time, 1);
 
-    CUDA_CHECK(cudaDeviceSynchronize());
+    // CUDA_CHECK(cudaDeviceSynchronize());
 
-    if (doChecking) {
-      result = checkMLPResults(mlpParams);
-      if (result != cudaSuccess) {
-        return 1;
-      }
-    }
+    // if (doChecking) {
+    //   result = checkMLPResults(mlpParams);
+    //   if (result != cudaSuccess) {
+    //     return 1;
+    //   }
+    // }
 
-    result = runBaselineLLaMA(split_k1, split_k2, mlpParams, producer_stream, 
-                              producer_stream2, baselineTime, matmul1Time, softmaxTime, matmul2Time, warmup);
+    // result = runBaselineLLaMA(split_k1, split_k2, mlpParams, producer_stream, 
+    //                           producer_stream2, baselineTime, matmul1Time, softmaxTime, matmul2Time, warmup);
 
-    CUDA_CHECK(cudaDeviceSynchronize());
-    printf("START-BASELINE:\n");
-    result = runBaselineLLaMA(split_k1, split_k2, mlpParams, producer_stream, 
-                              producer_stream2, baselineTime, matmul1Time, softmaxTime, matmul2Time, epochs);
-    CUDA_CHECK(result);
-    printf("END-BASELINE:\n");
-    printf("Average time %lf microseconds\n", baselineTime/(float)epochs);
+    // CUDA_CHECK(cudaDeviceSynchronize());
+    // printf("START-BASELINE:\n");
+    // result = runBaselineLLaMA(split_k1, split_k2, mlpParams, producer_stream, 
+    //                           producer_stream2, baselineTime, matmul1Time, softmaxTime, matmul2Time, epochs);
+    // CUDA_CHECK(result);
+    // printf("END-BASELINE:\n");
+    // printf("Average time %lf microseconds\n", baselineTime/(float)epochs);
   }
   }
 
@@ -1037,9 +1037,12 @@ int run(int argc, char* argv[]) {
   }
   //Setup cusync gemm
   cutlass::gemm::GemmCoord tileSizeCoord1{ShapeThreadBlock1::kM, ShapeThreadBlock1::kN, 1};
+  printf("ShapeThreadBlock1::kM = %d, ShapeThreadBlock1::kN = %d\n", ShapeThreadBlock1::kM, ShapeThreadBlock1::kN);
+
   cutlass::gemm::GemmCoord tileSizeCoord2{ShapeThreadBlock2::kM, ShapeThreadBlock2::kN, 1};
 
-  cutlass::gemm::GemmCoord gridDim1 = CuSyncGeMMSwizzle().get_tiled_shape(mlpParams.gemm_size1, tileSizeCoord1, split_k1);
+  cutlass::gemm::GemmCoord gridDim1 = CuSyncGeMMSwizzle().get_tiled_shape(mlpParams.gemm_size1, tileSizeCoord1, split_k1);  // 这里继承自原生cutlass的GemmHorizontalThreadblockSwizzle，输入problem_size和block_size，然后除一下。
+  printf("gridDim1: m = %d, n = %d, k = %d\n", gridDim1.m(), gridDim1.n(), gridDim1.k());
   cutlass::gemm::GemmCoord gridDim2 = CuSyncGeMMSwizzle().get_tiled_shape(mlpParams.gemm_size2, tileSizeCoord2, split_k2);
 
 #if defined(ROWSYNC)
@@ -1105,7 +1108,7 @@ int run(int argc, char* argv[]) {
 
     CuSync::setProducerConsumerPair(prod, cons);
 
-    result = runCuSyncLLaMA(split_k1, split_k2, mlpParams, prod, cons, streams, overlapTime, 1);
+    // result = runCuSyncLLaMA(split_k1, split_k2, mlpParams, prod, cons, streams, overlapTime, 1);
 
     CUDA_CHECK(cudaDeviceSynchronize());
     if (doChecking) {
@@ -1115,12 +1118,12 @@ int run(int argc, char* argv[]) {
       }
     }
 
-    result = runCuSyncLLaMA(split_k1, split_k2, mlpParams, prod, cons, streams, overlapTime, warmup);
+    // result = runCuSyncLLaMA(split_k1, split_k2, mlpParams, prod, cons, streams, overlapTime, warmup);
     
     CUDA_CHECK(cudaDeviceSynchronize());
     printf("START-OVERLAPPED:\n");
     
-    result = runCuSyncLLaMA(split_k1, split_k2, mlpParams, prod, cons, streams, overlapTime, epochs);
+    // result = runCuSyncLLaMA(split_k1, split_k2, mlpParams, prod, cons, streams, overlapTime, epochs);
     
     CUDA_CHECK(result);
     printf("END-OVERLAPPED:\n");
