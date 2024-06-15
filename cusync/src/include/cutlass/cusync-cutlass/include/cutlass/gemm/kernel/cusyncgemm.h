@@ -92,13 +92,15 @@ struct CuSyncGemm {
     int const *gather_A_indices;
     int const *gather_B_indices;
     int const *scatter_D_indices;
+    unsigned long long *global_time;
+
 
     //
     // Methods
     //
 
     CUTLASS_HOST_DEVICE
-    Params(): swizzle_log_tile(0), semaphore(0), gemm_k_size(0), custage() { }
+    Params(): swizzle_log_tile(0), semaphore(0), gemm_k_size(0), custage(), global_time(nullptr) { }
 
     CUTLASS_HOST_DEVICE
     Params(
@@ -113,7 +115,8 @@ struct CuSyncGemm {
       int *workspace = nullptr,
       int const *gather_A_indices = nullptr,
       int const *gather_B_indices = nullptr,
-      int const *scatter_D_indices = nullptr
+      int const *scatter_D_indices = nullptr,
+      unsigned long long *global_time = nullptr // Initialize the global time pointer
     ):
       custage(custage),
       problem_size(problem_size),
@@ -130,7 +133,9 @@ struct CuSyncGemm {
       output_op(output_op),
       gather_A_indices(gather_A_indices),
       gather_B_indices(gather_B_indices),
-      scatter_D_indices(scatter_D_indices) {
+      scatter_D_indices(scatter_D_indices),
+      global_time(global_time) // Assign the global time pointer 
+      {
 
       int total_gemm_k_iterations = (problem_size.k() + Mma::Shape::kK - 1) / Mma::Shape::kK;
       int gemm_k_iterations = (total_gemm_k_iterations + grid_tiled_shape.k() - 1) / grid_tiled_shape.k();
@@ -208,6 +213,15 @@ struct CuSyncGemm {
   //TODO: Had to make Params non-const, does that have any perf issue?
   CUTLASS_DEVICE
   void operator()(Params &params, SharedStorage &shared_storage) {
+
+    // 获取 global time
+    if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
+        unsigned long long time;
+        asm("mov.u64  %0, %%globaltimer;" : "=l"(time));
+        int index = blockIdx.x * gridDim.y + blockIdx.y;
+        params.global_time[index] = time;
+    }
+
     CuStageImpl& stage = params.custage;
     dim3 new_block_idx = stage.tile(&shared_storage.tile_idx);
     

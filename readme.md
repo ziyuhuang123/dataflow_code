@@ -12,15 +12,15 @@ Chimera: An Analytical Optimizing Framework for Effective Compute-intensive Oper
 
 Souffle: Optimizing Deep Learning Inference via Global Analysis and Tensor Expressions
 
-| Framework | baseline                                                                            |
+| Framework | baseline |    features    |
 |-----------|-------------------------------------------------------------------------------------|
-| TileFlow  |                     |
-| Cusync |                |
-| Welder    |                            |
-| Chimera   |  |
-| Souffle   | Bert等。。       |
-| Optimus   |        |
-| MASTRO   |        |
+| TileFlow  |       |           |
+| Cusync    |       |           |
+| Welder    |       |           |
+| Chimera   |       |           |
+| Souffle   | Bert等。。  |kernel融合（global）以消除启动开销；global sync|
+| Optimus   |        |          |
+| MASTRO   |        |           |
 
 0512
 1. 今天写了GUI，能够设定矩阵乘法的MNK尺寸，cache的大小。每次点击方框能够计算当前cache内的值和截至目前的global memory access。并且有undo按钮回撤到上一步。作用是帮助理解为什么不同Z字形的memory access不一样，想获得某种intuition。
