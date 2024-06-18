@@ -58,8 +58,8 @@ using ShapeWarp1 = cutlass::gemm::GemmShape<64, 64, 32>;
 using ShapeThreadBlock2 = cutlass::gemm::GemmShape<256, 128, 32>;
 using ShapeWarp2 = cutlass::gemm::GemmShape<64, 64, 32>;
 
-const int NumStages1 = 4;
-const int NumStages2 = 4;
+const int NumStages1 = 5;
+const int NumStages2 = 5;
 #else
 //<eval tiles>
 using ShapeThreadBlock1 = cutlass::gemm::GemmShape<256, 128, 32>;  
@@ -86,32 +86,32 @@ using SmArch = cutlass::arch::Sm80;
 #error "Invalid CUDA ARCH"
 #endif
 
-// template<typename TileOrder, uint GridN, uint TileM, uint TileN, uint stride>
-// struct StridedSync {
-//   uint waitValue_;
-//   uint postValue_;
+template<typename TileOrder, uint GridN, uint TileM, uint TileN, uint stride>
+struct StridedSync {
+  uint waitValue_;
+  uint postValue_;
 
-//   __device__ __host__ StridedSync(){}
+  __device__ __host__ StridedSync(){}
 
-//   __device__ __host__ uint waitValue(const dim3& tile, const dim3& grid) {
-//     return stride;
-//   }
+  __device__ __host__ uint waitValue(const dim3& tile, const dim3& grid) {
+    return stride;
+  }
 
-//   __device__ __host__ uint postValue(const dim3& tile, const dim3& grid) 
-//     {return 1;}
+  __device__ __host__ uint postValue(const dim3& tile, const dim3& grid) 
+    {return 1;}
 
-//   __device__ constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
-//     uint ty = tile.y/TileN;
-//     if (ty >= (GridN/TileN)) ty = ty - (GridN/TileN);
-//     // if (threadIdx.x == 0) printf("ty %d tile.y %d\n", ty, tile.y);
-//     return TileOrder().tileIndex({tile.x/TileM, ty, 0},
-//                                  grid);
-//   }
+  __device__ constexpr uint tileIndex(const dim3& tile, const dim3& grid) {
+    uint ty = tile.y/TileN;
+    if (ty >= (GridN/TileN)) ty = ty - (GridN/TileN);
+    // if (threadIdx.x == 0) printf("ty %d tile.y %d\n", ty, tile.y);
+    return TileOrder().tileIndex({tile.x/TileM, ty, 0},
+                                 grid);
+  }
 
-//   __device__ bool isSync(const dim3& tile, const dim3& grid) {
-//     return tile.y%TileN == 0;
-//   }
-// };
+  __device__ bool isSync(const dim3& tile, const dim3& grid) {
+    return tile.y%TileN == 0;
+  }
+};
 
 #ifdef ROWSYNC
   using ProdCuStage   = CuStage<TransposeXYOrder, NoSync,  RowSync<ShapeThreadBlock1::kM>, Opts>;
@@ -653,30 +653,6 @@ __global__ void gluKernel(T* xvw1, T* glu) {
 //   return result;
 // }
 
-template <typename Operator>
-__device__
-void deviceFunction(typename Operator::Params& params, typename Operator::SharedStorage& shared_storage) {
-  Operator op;
-  op(params, shared_storage);
-}
-
-/// Generic CUTLASS kernel template.
-template <typename Operator>
-__global__
-void Kernel(typename Operator::Params params) {
-  // Dynamic shared memory base pointer
-  extern __shared__ int SharedStorageBase[];
-  // printf("kernel from device_kernel.h\n");
-  // Declare pointer to dynamic shared memory.
-  typename Operator::SharedStorage *shared_storage =
-      reinterpret_cast<typename Operator::SharedStorage *>(SharedStorageBase);
-
-  Operator op;
-
-//   op(params, *shared_storage);
-// }
-  deviceFunction<Operator>(params, *shared_storage);
-}
 
 /*CuSync GPT-3 MLP*/
 template<typename GemmTy1, typename GemmTy2>

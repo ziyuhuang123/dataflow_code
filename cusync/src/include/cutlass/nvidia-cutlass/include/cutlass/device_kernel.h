@@ -58,21 +58,31 @@ namespace cutlass {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+template <typename Operator>
+__device__
+void deviceFunction(typename Operator::Params& params, typename Operator::SharedStorage& shared_storage) {
+  Operator op;
+  op(params, shared_storage);
+}
+
 /// Generic CUTLASS kernel template.
 template <typename Operator>
 __global__
 void Kernel(typename Operator::Params params) {
   // Dynamic shared memory base pointer
   extern __shared__ int SharedStorageBase[];
-
+  // printf("kernel from device_kernel.h\n");
   // Declare pointer to dynamic shared memory.
   typename Operator::SharedStorage *shared_storage =
       reinterpret_cast<typename Operator::SharedStorage *>(SharedStorageBase);
 
   Operator op;
 
-  op(params, *shared_storage);
+//   op(params, *shared_storage);
+// }
+  deviceFunction<Operator>(params, *shared_storage);
 }
+
 
 
 /// Generic CUTLASS kernel template.

@@ -42,8 +42,6 @@
 #include "cutlass/semaphore.h"
 #include "cutlass/arch/arch.h"
 
-#include <stdio.h>
-
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass {
@@ -92,15 +90,13 @@ struct CuSyncGemm {
     int const *gather_A_indices;
     int const *gather_B_indices;
     int const *scatter_D_indices;
-    unsigned long long *global_time;
-
 
     //
     // Methods
     //
 
     CUTLASS_HOST_DEVICE
-    Params(): swizzle_log_tile(0), semaphore(0), gemm_k_size(0), custage(), global_time(nullptr) { }
+    Params(): swizzle_log_tile(0), semaphore(0), gemm_k_size(0), custage() { }
 
     CUTLASS_HOST_DEVICE
     Params(
@@ -115,8 +111,7 @@ struct CuSyncGemm {
       int *workspace = nullptr,
       int const *gather_A_indices = nullptr,
       int const *gather_B_indices = nullptr,
-      int const *scatter_D_indices = nullptr,
-      unsigned long long *global_time = nullptr // Initialize the global time pointer
+      int const *scatter_D_indices = nullptr
     ):
       custage(custage),
       problem_size(problem_size),
@@ -133,9 +128,7 @@ struct CuSyncGemm {
       output_op(output_op),
       gather_A_indices(gather_A_indices),
       gather_B_indices(gather_B_indices),
-      scatter_D_indices(scatter_D_indices),
-      global_time(global_time) // Assign the global time pointer 
-      {
+      scatter_D_indices(scatter_D_indices) {
 
       int total_gemm_k_iterations = (problem_size.k() + Mma::Shape::kK - 1) / Mma::Shape::kK;
       int gemm_k_iterations = (total_gemm_k_iterations + grid_tiled_shape.k() - 1) / grid_tiled_shape.k();
@@ -213,15 +206,6 @@ struct CuSyncGemm {
   //TODO: Had to make Params non-const, does that have any perf issue?
   CUTLASS_DEVICE
   void operator()(Params &params, SharedStorage &shared_storage) {
-
-    // 获取 global time
-    if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
-        unsigned long long time;
-        asm("mov.u64  %0, %%globaltimer;" : "=l"(time));
-        int index = blockIdx.x * gridDim.y + blockIdx.y;
-        params.global_time[index] = time;
-    }
-
     CuStageImpl& stage = params.custage;
     dim3 new_block_idx = stage.tile(&shared_storage.tile_idx);
     
@@ -234,12 +218,6 @@ struct CuSyncGemm {
     // Compute threadblock location
     cutlass::gemm::GemmCoord threadblock_tile_offset =
         threadblock_swizzle.get_tile_offset(params.swizzle_log_tile, block_idx_x, block_idx_y, block_idx_z);
-
-    // if(threadIdx.x == 0&&threadIdx.y == 0&&threadIdx.z == 0){
-    //   printf("blockIdx.x: %d, blockIdx.y: %d, blockIdx.z: %d | GemmCoord: m = %d, n = %d, k = %d\n",
-    //             blockIdx.x, blockIdx.y, blockIdx.z,
-    //             threadblock_tile_offset.m(), threadblock_tile_offset.n(), threadblock_tile_offset.k());
-    // }
 
     // We do not need this anymore 
     // Early exit if CTA is out of range
@@ -311,7 +289,7 @@ struct CuSyncGemm {
       } else {
         mma.doWithOverlap(gemm_k_iterations, accumulators, iterator_A, iterator_B, accumulators,
                           stage, tb_offset_A, tb_offset_B, block_idx_x, block_idx_y);
-      } // custage.wait藏在mma里面。而这个要去threadblock文件里面去找
+      }
     }
 
     //

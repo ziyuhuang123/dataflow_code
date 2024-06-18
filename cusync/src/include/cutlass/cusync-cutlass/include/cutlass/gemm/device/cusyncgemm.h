@@ -34,12 +34,7 @@
 
 #pragma once
 
-#include "cutlass/cutlass.h" // 这个来自nvidia-cutlass底下。在编译的时候有
-// $(BUILD)/mlp-eval-rowsync: $(BUILD)/mlp-eval-rowsync.cu common.h $(CUSYNC_SRC_FILES)
-// 	$(NVCC)  $(DEFINES) $(INCLUDES) $(ARCH_FLAGS)  -DNDEBUG $< $(CUSYNC_SRC_FILES) -o $@ -Xptxas -v -lcublas -Xcompiler=-fopenmp -O3
-// NV_CUTLASS=$(ROOT)/src/include/cutlass/nvidia-cutlass
-// CUSYNC_CUTLASS=$(ROOT)/src/include/cutlass/cusync-cutlass
-// 然后cutlass.h的具体路径是：$(ROOT)/src/include/cutlass/nvidia-cutlass/include/cutlass/cutlass.h。不过编译器会自动搜索给定路径底下的所有文件。所以也可以搜到。
+#include "cutlass/cutlass.h"
 #include "cutlass/numeric_types.h"
 #include "cutlass/arch/arch.h"
 #include "cutlass/device_kernel.h"
@@ -366,7 +361,6 @@ public:
   CuSyncGemm() { }
 
   /// Determines whether the GEMM can execute the given problem.
-// 这个静态方法用于检查当前的 GEMM 配置是否能够实现给定的问题。它首先检查 split_k_slices 是否大于 1 且 kSplitKSerial 为 false，如果是，则返回错误。然后，它调用 GemmKernel::can_implement 方法来进一步检查配置的可行性。如果一切正常，返回 Status::kSuccess。
   static Status can_implement(Arguments const &args) {
 
     if (!kSplitKSerial && args.split_k_slices > 1) {
@@ -389,7 +383,6 @@ public:
   }
 
   /// Gets the workspace size
-// 这个静态方法用于计算执行 GEMM 操作所需的工作区大小。它首先确定网格的形状，然后根据 split_k_slices 和 kSplitKSerial 的值计算工作区的大小。如果需要分片，则会增加工作区的大小。
   static size_t get_workspace_size(Arguments const &args) {
     
     size_t bytes = 0;
@@ -411,7 +404,6 @@ public:
   }
 
   /// Initializes GEMM state from arguments.
-// 这个方法用于初始化 GEMM 操作的状态。它确定网格的形状，然后根据 split_k_slices 和 kSplitKSerial 的值初始化参数结构。如果需要工作区，并且提供了有效的工作区指针，则会将其初始化。最后，它将所有参数存储在 params_ 结构中。
   Status initialize(Arguments const &args, void *workspace = nullptr, cudaStream_t stream = nullptr) {
 
     // Determine grid shape
@@ -573,18 +565,6 @@ public:
   Status operator()(cudaStream_t stream = nullptr) {
     return run(stream);
   }
-
-// 通过重载 operator()，CuSyncGemm 类提供了多种不同的调用方式，每种方式对应不同的参数类型和数量。这种设计使得类的使用更加灵活和简洁。比如：
-// CuSyncGemm<MyCuStageImpl> gemm;
-
-// // 简单调用
-// gemm();
-
-// // 带有初始化参数的调用
-// gemm(args, workspace, stream);
-
-// // 带有重叠计算参数的调用
-// gemm(args, true, &kernelExecuted, workspace, stream);
 
   /// Runs the kernel using initialized state.
   Status operator()(

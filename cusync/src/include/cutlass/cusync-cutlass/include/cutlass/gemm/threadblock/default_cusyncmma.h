@@ -258,7 +258,7 @@ struct DefaultCuSyncMma<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB,
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Specialization for row-major output (OperatorClass TensorOp) 这个仅限于float
+/// Specialization for row-major output (OperatorClass TensorOp)
 template <
     /// Layout type for A matrix operand
     typename LayoutA,
