@@ -279,7 +279,7 @@ struct DefaultCuSyncGemm<CuStageImpl, ElementA, LayoutA, kAlignmentA, ElementB, 
                    EpilogueOutputOp, ThreadblockSwizzle, Stages, SplitKSerial,
                    Operator, SharedMemoryClear, GatherA, GatherB, ScatterD,
                    PermuteDLayout, PermuteALayout, PermuteBLayout> {
-
+// 只有arch::Sm80这里指定了，只要这个等于sm80，那就进入当前这个class
   static_assert((platform::is_same<LayoutC, layout::RowMajor>::value
              || platform::is_same<LayoutC, layout::AffineRankN<2>>::value),
              "Epilogue in the kernel level must be row major");
