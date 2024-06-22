@@ -567,116 +567,116 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   CUDA_CHECK(cudaEventCreate(&start));
   CUDA_CHECK(cudaEventCreate(&end));
 
-//   for (int r = 0; r < 1; r++) {
-//     CUDA_CHECK(cudaEventRecord(start, producer_stream));
-//     status = gemm_op1.run(true, NULL, producer_stream);
+  for (int r = 0; r < 1; r++) {
+    CUDA_CHECK(cudaEventRecord(start, producer_stream));
+    status = gemm_op1.run(true, NULL, producer_stream);
 
-// //     /// Operator class tag
-// //     // using OperatorClass_ = cutlass::arch::OpClassTensorOp; // 这里一开始总是报错，关键是要加上cutlass::arch，以及要include相应文件，就去文件里找，这个对应的是nvcutlass底下arch的mma.h，所以include就好。(可以直接用绝对路径)。另一种方法，因为wmma.h里面也include了同一个mma.h。其实include wmma.h也是可以的。（后来发现前面又MMAOp是一样的内容）
+    /// Operator class tag
+    // using OperatorClass_ = cutlass::arch::OpClassTensorOp; // 这里一开始总是报错，关键是要加上cutlass::arch，以及要include相应文件，就去文件里找，这个对应的是nvcutlass底下arch的mma.h，所以include就好。(可以直接用绝对路径)。另一种方法，因为wmma.h里面也include了同一个mma.h。其实include wmma.h也是可以的。（后来发现前面又MMAOp是一样的内容）
 
-// //     // Access granularity of A matrix in units of elements
-// //     static constexpr int AlignmentA =
-// //         cutlass::gemm::device::DefaultGemmConfiguration<MMAOp, SmArch, ElementInputA, ElementInputB,
-// //                                  ElementOutput, ElementAccumulator>::kAlignmentA;
+    // Access granularity of A matrix in units of elements
+    static constexpr int AlignmentA =
+        cutlass::gemm::device::DefaultGemmConfiguration<MMAOp, SmArch, ElementInputA, ElementInputB,
+                                 ElementOutput, ElementAccumulator>::kAlignmentA;
 
-// // // constexpr 的作用
-// // // constexpr 关键字用于声明在编译时可求值的常量表达式。它的主要作用包括：
+// constexpr 的作用
+// constexpr 关键字用于声明在编译时可求值的常量表达式。它的主要作用包括：
 
-// // // 编译期求值：确保表达式在编译期就能求值，这对模板参数尤其重要，因为模板参数必须在编译时确定。
-// // // 常量传播：编译器可以在编译期进行常量传播和优化，这可以提升程序的性能。
-// // // 安全性：使用 constexpr 可以确保这些常量在整个程序生命周期中都是不可变的，提高了代码的安全性和可维护性。--->没有这个会报错说这个不是常量。。。原先是在device/cusyncgemm.h里面的template。template是在编译时就自动确定下来的。这里要是直接写int AlignmentA，就是在运行时确定。不过加上constexpr就OK啦
+// 编译期求值：确保表达式在编译期就能求值，这对模板参数尤其重要，因为模板参数必须在编译时确定。
+// 常量传播：编译器可以在编译期进行常量传播和优化，这可以提升程序的性能。
+// 安全性：使用 constexpr 可以确保这些常量在整个程序生命周期中都是不可变的，提高了代码的安全性和可维护性。--->没有这个会报错说这个不是常量。。。原先是在device/cusyncgemm.h里面的template。template是在编译时就自动确定下来的。这里要是直接写int AlignmentA，就是在运行时确定。不过加上constexpr就OK啦
 
-// //     // Access granularity of B matrix in units of elements
-// //     static constexpr int AlignmentB =
-// //         cutlass::gemm::device::DefaultGemmConfiguration<MMAOp, SmArch, ElementInputA, ElementInputB,
-// //                                  ElementOutput, ElementAccumulator>::kAlignmentB;
-// //     static int const kAlignmentA = AlignmentA;
-// //     static int const kAlignmentB = AlignmentB;
+    // Access granularity of B matrix in units of elements
+    static constexpr int AlignmentB =
+        cutlass::gemm::device::DefaultGemmConfiguration<MMAOp, SmArch, ElementInputA, ElementInputB,
+                                 ElementOutput, ElementAccumulator>::kAlignmentB;
+    static int const kAlignmentA = AlignmentA;
+    static int const kAlignmentB = AlignmentB;
 
-// //     using Operator_ =
-// //         cutlass::gemm::device::DefaultGemmConfiguration<MMAOp, SmArch, ElementInputA, ElementInputB,
-// //                                  ElementOutput, ElementAccumulator>::Operator;
+    using Operator_ =
+        cutlass::gemm::device::DefaultGemmConfiguration<MMAOp, SmArch, ElementInputA, ElementInputB,
+                                 ElementOutput, ElementAccumulator>::Operator;
 
-// //     static constexpr auto SharedClearOption = cutlass::gemm::SharedMemoryClearOption::kNone;
-// //     using PermuteDLayout = cutlass::layout::NoPermute;
+    static constexpr auto SharedClearOption = cutlass::gemm::SharedMemoryClearOption::kNone;
+    using PermuteDLayout = cutlass::layout::NoPermute;
 
-// //     using GemmKernel = typename cutlass::gemm::kernel::DefaultCuSyncGemm<ProdCuStage,
-// //                                        ElementInputA, 
-// //                                        LayoutInputA,
-// //                                        kAlignmentA, 
-// //                                        ElementInputB, 
-// //                                        LayoutInputB,
-// //                                        kAlignmentB,
-// //                                        ElementOutput, 
-// //                                        LayoutOutput,
-// //                                        ElementAccumulator, 
-// //                                        MMAOp,
-// //                                        SmArch, 
-// //                                        ShapeThreadBlock1,
-// //                                        ShapeWarp1, 
-// //                                        ShapeMMAOp,
-// //                                        EpilogueOp1, 
-// //                                        CuSyncGeMMSwizzle,
-// //                                        NumStages1, 
-// //                                        false, 
-// //                                        Operator_, 
-// //                                        SharedClearOption,
-// //                                        false,
-// //                                        false,
-// //                                        false,
-// //                                        PermuteDLayout
-// //                                        >::GemmKernel;
+    using GemmKernel = typename cutlass::gemm::kernel::DefaultCuSyncGemm<ProdCuStage,
+                                       ElementInputA, 
+                                       LayoutInputA,
+                                       kAlignmentA, 
+                                       ElementInputB, 
+                                       LayoutInputB,
+                                       kAlignmentB,
+                                       ElementOutput, 
+                                       LayoutOutput,
+                                       ElementAccumulator, 
+                                       MMAOp,
+                                       SmArch, 
+                                       ShapeThreadBlock1,
+                                       ShapeWarp1, 
+                                       ShapeMMAOp,
+                                       EpilogueOp1, 
+                                       CuSyncGeMMSwizzle,
+                                       NumStages1, 
+                                       false, 
+                                       Operator_, 
+                                       SharedClearOption,
+                                       false,
+                                       false,
+                                       false,
+                                       PermuteDLayout
+                                       >::GemmKernel;
 
-// //     CuSyncGeMMSwizzle cuSyncGeMMSwizzle;
+    CuSyncGeMMSwizzle cuSyncGeMMSwizzle;
 
-// //     cutlass::gemm::GemmCoord grid_shape = cuSyncGeMMSwizzle.get_tiled_shape(
-// //       args1.problem_size, 
-// //       {ShapeThreadBlock1::kM, ShapeThreadBlock1::kN, ShapeThreadBlock1::kK},
-// //       args1.split_k_slices);
+    cutlass::gemm::GemmCoord grid_shape = cuSyncGeMMSwizzle.get_tiled_shape(
+      args1.problem_size, 
+      {ShapeThreadBlock1::kM, ShapeThreadBlock1::kN, ShapeThreadBlock1::kK},
+      args1.split_k_slices);
 
-// //     typename GemmKernel::Params params_{
-// //       args1.custage,
-// //       args1.problem_size,
-// //       grid_shape,
-// //       args1.ref_A.non_const_ref(),
-// //       args1.ref_B.non_const_ref(),
-// //       args1.ref_C.non_const_ref(),
-// //       args1.ref_D,
-// //       args1.epilogue,
-// //       reinterpret_cast<int *>(workspace1.get()),
-// //       args1.gather_A_indices,
-// //       args1.gather_B_indices,
-// //       args1.scatter_D_indices
-// //     };
+    typename GemmKernel::Params params_{
+      args1.custage,
+      args1.problem_size,
+      grid_shape,
+      args1.ref_A.non_const_ref(),
+      args1.ref_B.non_const_ref(),
+      args1.ref_C.non_const_ref(),
+      args1.ref_D,
+      args1.epilogue,
+      reinterpret_cast<int *>(workspace1.get()),
+      args1.gather_A_indices,
+      args1.gather_B_indices,
+      args1.scatter_D_indices
+    };
 
-// //     dim3 grid = cuSyncGeMMSwizzle.get_grid_shape(params_.grid_tiled_shape);
-// //     dim3 block(GemmKernel::kThreadCount, 1, 1);
-// //     int smem_size = 100 << 10;
-// //     cudaFuncSetAttribute(AllKernel<GemmKernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
-//     // AllKernel<GemmKernel><<<grid, block, smem_size>>>(params_);
+    dim3 grid = cuSyncGeMMSwizzle.get_grid_shape(params_.grid_tiled_shape);
+    dim3 block(GemmKernel::kThreadCount, 1, 1);
+    int smem_size = 100 << 10;
+    cudaFuncSetAttribute(AllKernel<GemmKernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
+    AllKernel<GemmKernel><<<grid, block, smem_size>>>(params_);
 
 
 
-//     // CUTLASS_CHECK(status);
-//     // CUDA_CHECK(cudaDeviceSynchronize());
-//     // CUDA_CHECK(cudaDeviceSynchronize());
-//     // prod.invokeWaitKernel(consumer_stream);  
-//     // // CUDA_CHECK(cudaDeviceSynchronize());
-//     // status = gemm_op2.run(true, NULL, consumer_stream);
-//     // CUDA_CHECK(cudaEventRecord(end, consumer_stream));
-//     // CUDA_CHECK(cudaEventSynchronize(end));
-//     // CUTLASS_CHECK(status);
-//     // float time_ms = 0;
-//     // CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, end));
+    // CUTLASS_CHECK(status);
+    // CUDA_CHECK(cudaDeviceSynchronize());
+    // CUDA_CHECK(cudaDeviceSynchronize());
+    // prod.invokeWaitKernel(consumer_stream);  
+    // // CUDA_CHECK(cudaDeviceSynchronize());
+    // status = gemm_op2.run(true, NULL, consumer_stream);
+    // CUDA_CHECK(cudaEventRecord(end, consumer_stream));
+    // CUDA_CHECK(cudaEventSynchronize(end));
+    // CUTLASS_CHECK(status);
+    // float time_ms = 0;
+    // CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, end));
     
-//     // if (iters > 10)
-//     //   printf("{\"Total\": %lf}\n",time_ms*1000.0f);
-//     // execTime += time_ms*1000.0f;
-//     // prod.incrementIter();
-//     // cons.incrementIter();
-//     // gemm_op2.params_.custage.incrementIter();
-//     // gemm_op1.params_.custage.incrementIter();
-//   }
+    // if (iters > 10)
+    //   printf("{\"Total\": %lf}\n",time_ms*1000.0f);
+    // execTime += time_ms*1000.0f;
+    // prod.incrementIter();
+    // cons.incrementIter();
+    // gemm_op2.params_.custage.incrementIter();
+    // gemm_op1.params_.custage.incrementIter();
+  }
 
 
   for (int r = 0; r < iters; r++) {

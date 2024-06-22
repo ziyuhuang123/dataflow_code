@@ -34,7 +34,7 @@
 */
 
 #pragma once
-
+#include<cusync/cusync.h>
 #include "cutlass/cutlass.h"
 
 #include "cutlass/gemm/gemm.h"
@@ -50,8 +50,11 @@ namespace kernel {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
+struct BaseParams {
+  virtual ~BaseParams() = default;
+};
+
 template <
-  typename CuStageImpl,
   typename Mma_,                  ///! Threadblock-scoped matrix multiply-accumulate 
   typename Epilogue_,             ///! Epilogue
   typename ThreadblockSwizzle_,   ///! Threadblock swizzling function
@@ -69,9 +72,13 @@ struct CuSyncGemm {
   using WarpCount = typename Mma::WarpCount;
   static int const kThreadCount = 32 * WarpCount::kCount;
 
+
+
+
   /// Parameters structure
-  struct Params {
-    CuStageImpl custage;
+  template <typename CustageType>
+  struct Params : public BaseParams {
+    CustageType custage;
     cutlass::gemm::GemmCoord problem_size;
     cutlass::gemm::GemmCoord grid_tiled_shape;
     int swizzle_log_tile;
@@ -90,17 +97,20 @@ struct CuSyncGemm {
     int const *gather_A_indices;
     int const *gather_B_indices;
     int const *scatter_D_indices;
+    int block_range_down;
+    int block_range_up;
+    int current_stage;
 
     //
     // Methods
-    //
+    // ,custage()
 
     CUTLASS_HOST_DEVICE
-    Params(): swizzle_log_tile(0), semaphore(0), gemm_k_size(0), custage() { }
+    Params(): swizzle_log_tile(0), semaphore(0), gemm_k_size(0), block_range_down(0),block_range_up(0) { }
 
     CUTLASS_HOST_DEVICE
     Params(
-      CuStageImpl custage,
+      CustageType custage,
       cutlass::gemm::GemmCoord const & problem_size,
       cutlass::gemm::GemmCoord const & grid_tiled_shape,
       typename Mma::IteratorA::TensorRef ref_A,
@@ -111,7 +121,10 @@ struct CuSyncGemm {
       int *workspace = nullptr,
       int const *gather_A_indices = nullptr,
       int const *gather_B_indices = nullptr,
-      int const *scatter_D_indices = nullptr
+      int const *scatter_D_indices = nullptr,
+      int block_range_down = 0,
+      int block_range_up = 0,
+      int current_stage = 0
     ):
       custage(custage),
       problem_size(problem_size),
@@ -128,7 +141,10 @@ struct CuSyncGemm {
       output_op(output_op),
       gather_A_indices(gather_A_indices),
       gather_B_indices(gather_B_indices),
-      scatter_D_indices(scatter_D_indices) {
+      scatter_D_indices(scatter_D_indices),
+      block_range_down(block_range_down),
+      block_range_up(block_range_up),
+      current_stage(current_stage){
 
       int total_gemm_k_iterations = (problem_size.k() + Mma::Shape::kK - 1) / Mma::Shape::kK;
       int gemm_k_iterations = (total_gemm_k_iterations + grid_tiled_shape.k() - 1) / grid_tiled_shape.k();
@@ -204,12 +220,13 @@ struct CuSyncGemm {
   }
 
   //TODO: Had to make Params non-const, does that have any perf issue?
+  template <typename CustageType>
   CUTLASS_DEVICE
-  void operator()(Params &params, SharedStorage &shared_storage) {
+  void operator()(Params<CustageType> &params, SharedStorage &shared_storage) {
     if(blockIdx.x==0&&blockIdx.y==0&&blockIdx.z==0&&threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0){
       printf("enter kernel/cusyncgemm.h\n");
     } 
-    CuStageImpl& stage = params.custage;
+    CustageType& stage = params.custage;
     dim3 new_block_idx = stage.tile(&shared_storage.tile_idx);
     
     uint block_idx_y = new_block_idx.y;
