@@ -664,7 +664,7 @@ cudaError_t runBaselineLLaMA(int split_k1, int split_k2,
 
 template <typename Operator>
 __device__
-void GEMMdeviceFunction(cutlass::gemm::kernel::BaseParams* base_params) {
+void GEMMdeviceFunction_cons(typename Operator::Params<ConsCuStage> params) {
   // Dynamic shared memory base pointer
   extern __shared__ int SharedStorageBase[];
 
@@ -672,40 +672,40 @@ void GEMMdeviceFunction(cutlass::gemm::kernel::BaseParams* base_params) {
   typename Operator::SharedStorage *shared_storage =
       reinterpret_cast<typename Operator::SharedStorage *>(SharedStorageBase);
 
-  // // 通过 current_stage 字段判断类型，并进行类型转换和操作
-  // if (base_params->current_stage == 0) {
-  //   auto* params = reinterpret_cast<typename Operator::template Params<ProdCuStage>*>(base_params);
-  //   Operator op;
-  //   op(*params, *shared_storage);
-  // } else if (base_params->current_stage == 1) {
-  //   auto* params = reinterpret_cast<typename Operator::template Params<ConsCuStage>*>(base_params);
-  //   Operator op;
-  //   op(*params, *shared_storage);
-  // } else {
-  //   // 处理错误
-  //   printf("Unknown Params type\n");
-  // }
+  Operator op;
+  op(params, *shared_storage);
+}
+
+
+template <typename Operator>
+__device__
+void GEMMdeviceFunction_prod(typename Operator::Params<ProdCuStage> params) {
+  // Dynamic shared memory base pointer
+  extern __shared__ int SharedStorageBase[];
+
+  // Declare pointer to dynamic shared memory.
+  typename Operator::SharedStorage *shared_storage =
+      reinterpret_cast<typename Operator::SharedStorage *>(SharedStorageBase);
+
+  Operator op;
+  op(params, *shared_storage);
 }
 
 /// Generic CUTLASS kernel template.
 template <typename Operator>
 __global__
-// void AllKernel(typename Operator::Params<ProdCuStage> *params_array, int num_params) {
-void AllKernel(cutlass::gemm::kernel::BaseParams **params_array, int num_params) {
-  // 调用device function来执行op，并显式传递模板参数
-  if(blockIdx.x==0&&blockIdx.y==0&&blockIdx.z==0&&threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0){
-    printf("enter AllKernel\n");
-    printf("params_array[0]->current_stage: %d\n", params_array[0]->current_stage);
-  }
+void AllKernel(typename Operator::Params<ConsCuStage> cons_params, typename Operator::Params<ProdCuStage> prod_params, int num_params) {
+// void AllKernel(cutlass::gemm::kernel::BaseParams **params_array, int num_params) { // 以后可以这样改来写的更漂亮。
 
-  // for(int i=0;i<num_params;i++){
-  //   if(blockIdx.x>=params_array[i]->block_range_down && blockIdx.x<params_array[i]->block_range_up){
-  //     if(threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0){
-  //       printf("start device kernel\n");
-  //     }
-  //     // GEMMdeviceFunction<Operator>(params_array[i]);
-  //   } // 马上改一下，在这里就确定下来baseparam的type，然后传递给device function
-  // }
+  if(blockIdx.x>=prod_params.block_range_down && blockIdx.x<prod_params.block_range_up){
+    GEMMdeviceFunction_prod<Operator>(prod_params);
+  }
+  else if(blockIdx.x>=cons_params.block_range_down && blockIdx.x<cons_params.block_range_up){
+    GEMMdeviceFunction_cons<Operator>(cons_params);
+  }
+  else{
+    printf("Error out of block range\n");
+  }
 }
 
 /*CuSync GPT-3 MLP*/
@@ -845,14 +845,15 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
     //   0
     // };
 
-    typename GemmKernel::Params<ProdCuStage> prod_params{prod, args1.problem_size, grid_shape1, args1.ref_A.non_const_ref(), args1.ref_B.non_const_ref(), args1.ref_C.non_const_ref(), args1.ref_D, args1.epilogue, reinterpret_cast<int *>(workspace1.get()), args1.gather_A_indices, args1.gather_B_indices, args1.scatter_D_indices, 0, 56, 0};
+    typename GemmKernel::Params<ProdCuStage> prod_params{prod, args1.problem_size, grid_shape1, args1.ref_A.non_const_ref(), args1.ref_B.non_const_ref(), args1.ref_C.non_const_ref(), args1.ref_D, args1.epilogue, reinterpret_cast<int *>(workspace1.get()), args1.gather_A_indices, args1.gather_B_indices, args1.scatter_D_indices, 0, 56, 2, 0};
 
-    typename GemmKernel::Params<ConsCuStage> cons_params{cons, args2.problem_size, grid_shape2, args2.ref_A.non_const_ref(), args2.ref_B.non_const_ref(), args2.ref_C.non_const_ref(), args2.ref_D, {mlpParams.alpha, mlpParams.beta}, reinterpret_cast<int *>(workspace2.get()), args2.gather_A_indices, args2.gather_B_indices, args2.scatter_D_indices, 56, 72, 1};
+    typename GemmKernel::Params<ConsCuStage> cons_params{cons, args2.problem_size, grid_shape2, args2.ref_A.non_const_ref(), args2.ref_B.non_const_ref(), args2.ref_C.non_const_ref(), args2.ref_D, {mlpParams.alpha, mlpParams.beta}, reinterpret_cast<int *>(workspace2.get()), args2.gather_A_indices, args2.gather_B_indices, args2.scatter_D_indices, 56, 72, 2, 1};
 
 
     // 创建包含 prod_params 和 cons_params 的数组
-    cutlass::gemm::kernel::BaseParams* params_array[] = { &prod_params, &cons_params }; 
+    // cutlass::gemm::kernel::BaseParams* params_array[] = { &prod_params, &cons_params }; 
     // GemmKernel::Params<ProdCuStage> params_array[] = { prod_params};
+    // GemmKernel::Params<ProdCuStage> params_array = prod_params;
     // cutlass::gemm::kernel::BaseParams* params_array[] = { &prod_params};
 
     // for (int i = 0; i < 2; i++) {
@@ -862,7 +863,7 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
 
     // dim3 grid = cuSyncGeMMSwizzle.get_grid_shape(params_.grid_tiled_shape);
     // dim3 block(GemmKernel::kThreadCount, 1, 1);
-    dim3 grid = {56, 1, 1};
+    dim3 grid = {72, 1, 1};
     dim3 block = {256, 1, 1};
     // dim3 block(GemmKernel::kThreadCount, 1, 1);
     // printf("GemmKernel::kThreadCount=%d\n",GemmKernel::kThreadCount);  // 验证了一下确实是256
@@ -870,7 +871,7 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
 
 
     cudaFuncSetAttribute(AllKernel<GemmKernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
-    AllKernel<GemmKernel><<<grid, block, smem_size>>>(params_array, 2); // 这里的2是说有两个参数，prod_params 和 cons_params
+    AllKernel<GemmKernel><<<grid, block, smem_size>>>(cons_params, prod_params, 2); 
     CUDA_CHECK(cudaDeviceSynchronize());
 
 
@@ -880,15 +881,15 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
     // prod.invokeWaitKernel(consumer_stream);  
     // // CUDA_CHECK(cudaDeviceSynchronize());
     // status = gemm_op2.run(true, NULL, consumer_stream);
-    // CUDA_CHECK(cudaEventRecord(end, consumer_stream));
-    // CUDA_CHECK(cudaEventSynchronize(end));
-    // CUTLASS_CHECK(status);
-    // float time_ms = 0;
-    // CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, end));
+    CUDA_CHECK(cudaEventRecord(end, consumer_stream));
+    CUDA_CHECK(cudaEventSynchronize(end));
+    CUTLASS_CHECK(status);
+    float time_ms = 0;
+    CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, end));
     
     // if (iters > 10)
     //   printf("{\"Total\": %lf}\n",time_ms*1000.0f);
-    // execTime += time_ms*1000.0f;
+    execTime += time_ms*1000.0f;
     // prod.incrementIter();
     // cons.incrementIter();
     // gemm_op2.params_.custage.incrementIter();
@@ -1258,15 +1259,15 @@ int run(int argc, char* argv[]) {
       }
     }
     printf("1089 line\n");
-    // result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, warmup);
+    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, warmup);
     
-    // CUDA_CHECK(cudaDeviceSynchronize());
-    // printf("START-OVERLAPPED:\n");
+    CUDA_CHECK(cudaDeviceSynchronize());
+    printf("START-OVERLAPPED:\n");
     
-    // result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, epochs);
+    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, epochs);
     
-    // CUDA_CHECK(result);
-    // printf("END-OVERLAPPED:\n");
+    CUDA_CHECK(result);
+    printf("END-OVERLAPPED:\n");
     
     printf("Average time %lf microseconds\n", overlapTime/(float)epochs);
   }

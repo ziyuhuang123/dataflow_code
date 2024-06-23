@@ -109,12 +109,7 @@ struct CuSyncGemm {
     // ,custage()
 
     CUTLASS_HOST_DEVICE
-    Params(): swizzle_log_tile(0), semaphore(0), gemm_k_size(0){
-      this->length = 0;
-      this->block_range_down = 0;
-      this->block_range_up = 0; 
-      this->current_stage = 0;
-     }
+    Params(): swizzle_log_tile(0), semaphore(0), gemm_k_size(0){ }
 
     CUTLASS_HOST_DEVICE
     Params(

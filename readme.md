@@ -203,3 +203,44 @@ cusyncgemm引用了kernel/default_cusyncgemm.h来实例化自己。而kernel/def
 
 0613
 如文件夹block_swizzle里所述，那是在3050 laptop上测的，figure1明显表明了1d情况下block发射顺序和idx.x完全正相关。明天要考虑，cutlass的swizzle是在2d情况下实现的，这是不是对我的融合造成了阻碍？或者。。能不能只在z维度上进行调整？
+
+0623
+结果速报：
+FFN0和FFN1成功融合到一个kernel，尚未（也不一定打算）再融flash decoding进去。以下时长循环20次取平均，有1个warm up时长不计
+1. 按我的思路发射一整个kernel，一次平均663us
+2. cusync策略分两个stream和wait kernel，一次平均746us
+
+之前预期能够从2个wave变成1个wave。但是不同kernel的一个wave时长是不一样的，速度提升达不到50%。
+
+先回家睡个觉，明天深入分析一下
+
+(base) a40-01% build/mlp-eval-rowsync --batch 16 --check true --model gpt3 --split-k1 1 --split-k2 1 --policy cusync
+model=gpt3 batch=16 check=1 policy= cusync
+GeMM 1 Size: 16, 14336, 4096
+GeMM 2 Size: 16, 4096, 14336
+1082 line
+Checking first GeMM
+First GeMM passed
+Checking second GeMM
+Second GeMM passed
+START-OVERLAPPED:
+END-OVERLAPPED:
+Average time 746.291217 microseconds
+
+
+(base) a40-01% build/mlp-eval-rowsync --batch 16 --check true --model gpt3 --split-k1 1 --split-k2 1 --policy cusync
+model=gpt3 batch=16 check=1 policy= cusync
+GeMM 1 Size: 16, 14336, 4096
+GeMM 2 Size: 16, 4096, 14336
+enter kernel/cusyncgemm.h
+1082 line
+Checking first GeMM
+First GeMM passed
+Checking second GeMM
+Second GeMM passed
+1089 line
+enter kernel/cusyncgemm.h
+START-OVERLAPPED:
+enter kernel/cusyncgemm.h
+END-OVERLAPPED:
+Average time 663.552002 microseconds
