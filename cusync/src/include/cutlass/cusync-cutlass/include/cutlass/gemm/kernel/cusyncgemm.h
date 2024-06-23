@@ -51,7 +51,16 @@ namespace kernel {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 struct BaseParams {
+  int block_range_down; // 添加成员变量
+  int block_range_up;   // 添加成员变量
+  int length;
+  int current_stage;
   virtual ~BaseParams() = default;
+
+  // 定义一个接受这些参数的构造函数
+  BaseParams(int block_range_down = 0, int block_range_up = 0, int length = 0, int current_stage = 0)
+    : block_range_down(block_range_down), block_range_up(block_range_up), length(length), current_stage(current_stage) {}
+
 };
 
 template <
@@ -71,9 +80,6 @@ struct CuSyncGemm {
   /// Warp count (concept: GemmShape)
   using WarpCount = typename Mma::WarpCount;
   static int const kThreadCount = 32 * WarpCount::kCount;
-
-
-
 
   /// Parameters structure
   template <typename CustageType>
@@ -97,16 +103,18 @@ struct CuSyncGemm {
     int const *gather_A_indices;
     int const *gather_B_indices;
     int const *scatter_D_indices;
-    int block_range_down;
-    int block_range_up;
-    int current_stage;
 
     //
     // Methods
     // ,custage()
 
     CUTLASS_HOST_DEVICE
-    Params(): swizzle_log_tile(0), semaphore(0), gemm_k_size(0), block_range_down(0),block_range_up(0) { }
+    Params(): swizzle_log_tile(0), semaphore(0), gemm_k_size(0){
+      this->length = 0;
+      this->block_range_down = 0;
+      this->block_range_up = 0; 
+      this->current_stage = 0;
+     }
 
     CUTLASS_HOST_DEVICE
     Params(
@@ -124,8 +132,10 @@ struct CuSyncGemm {
       int const *scatter_D_indices = nullptr,
       int block_range_down = 0,
       int block_range_up = 0,
+      int length = 0,
       int current_stage = 0
     ):
+      BaseParams{block_range_down, block_range_up, length, current_stage}, // 调用基类构造函数
       custage(custage),
       problem_size(problem_size),
       grid_tiled_shape(grid_tiled_shape),
@@ -141,17 +151,12 @@ struct CuSyncGemm {
       output_op(output_op),
       gather_A_indices(gather_A_indices),
       gather_B_indices(gather_B_indices),
-      scatter_D_indices(scatter_D_indices),
-      block_range_down(block_range_down),
-      block_range_up(block_range_up),
-      current_stage(current_stage){
-
+      scatter_D_indices(scatter_D_indices)
+      {
       int total_gemm_k_iterations = (problem_size.k() + Mma::Shape::kK - 1) / Mma::Shape::kK;
       int gemm_k_iterations = (total_gemm_k_iterations + grid_tiled_shape.k() - 1) / grid_tiled_shape.k();
-      
       gemm_k_size = gemm_k_iterations * Mma::Shape::kK;
-
-    semaphore = workspace;
+      semaphore = workspace;
     }
   };
 

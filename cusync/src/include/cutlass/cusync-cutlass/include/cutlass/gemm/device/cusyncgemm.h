@@ -346,7 +346,6 @@ class CuSyncGemm {
       gather_A_indices(gather_A_indices_),
       gather_B_indices(gather_B_indices_),
       scatter_D_indices(scatter_D_indices_) {
-
     }
   };
   /// Kernel parameters object
