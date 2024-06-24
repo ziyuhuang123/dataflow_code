@@ -223,9 +223,6 @@ struct CuSyncGemm {
   template <typename CustageType>
   CUTLASS_DEVICE
   void operator()(Params<CustageType> &params, SharedStorage &shared_storage) {
-    if(blockIdx.x==0&&blockIdx.y==0&&blockIdx.z==0&&threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0){
-      printf("enter kernel/cusyncgemm.h\n");
-    } 
     CustageType& stage = params.custage;
     dim3 new_block_idx = stage.tile(&shared_storage.tile_idx);
     

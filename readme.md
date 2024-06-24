@@ -12,6 +12,8 @@ Chimera: An Analytical Optimizing Framework for Effective Compute-intensive Oper
 
 Souffle: Optimizing Deep Learning Inference via Global Analysis and Tensor Expressions
 
+Rethinking Latency-Aware DNN Design With GPU Tail Effect Analysis（1. 揭示了DNN优化中很多剪枝等操作没有带来线性提升，而是阶梯式上升，原因是尾部效益。2. 根据尾部效应来指导算法剪枝等优化。3. 不过没有真的解决尾部效益本身。）
+
 | Framework | baseline |    features    |
 |-----------|-------------------------------------------------------------------------------------|
 | TileFlow  |       |           |
