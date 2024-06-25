@@ -246,3 +246,28 @@ START-OVERLAPPED:
 enter kernel/cusyncgemm.h
 END-OVERLAPPED:
 Average time 663.552002 microseconds
+
+0625
+
+1. 继续思考我的工作如何总结一个abstract出来。
+2. 我的工作和cusync区别在哪？
+
+
+```
+1. cusync的order不是不同stream之间的执行order，而是消费者stream和生产者按照相同顺序来执行计算，目的是让等待时间会更短。也就是说cusync不能真正控制prod和cons相互之间的执行顺序。--->所以我需要真的控制执行顺序，写出代码证明L2命中率我能更高。。。（比如我提出一种可能性：算完GEMM0的一整行后，不要完整的算GEMM1的一整行，而是算一半行，否则GEMM1的权重会极大的污染L2）
+2. 我的优势其一在于idx方法比stream更快。（stream开销大）
+3. 其二在于idx方法更灵活，能更细粒度的控制block执行顺序。
+4. 并且cusync仅考虑一对一的简单情形，没有考虑多对多的复杂场景，idx的引入扩展了执行顺序的搜索空间。
+5. 当前多个stream和wait kernel的设计，不能最小化空等的消费者block。依然有可能发射大量的消费者block而空等。idx方法可以完全消除这个问题。“因此，cuSync确保消费者内核的线程块不会排在至少一个生产者内核的线程块之前。”---->因此，如果有三个stream，那就是第一个stream产生一个block，就开启第二个stream，第二个stream产生一个block，就开启第三个stream，这样空等就可能很多。stream越多越乱，而论文里确实也没有测更多的e2e的场景（我可以试一下！）
+```
+
+```
+cusync 是不是可以总结为没做kernel fusion，是通过信号量/wait kernel，控制不同的stream的kernel内部的CTA的同步
+
+所以cusync和你的差别是：
+1. kernel之间的数据复用。不管是L1还是L2的数据复用，cusync都完全没法去处理
+2. stream management/kernel launch开销。
+3. 管理的能力有差别，相比于cusync，你的工作能够打破XX约束
+
+我这里的第3点是看的你的进一步的总结。但是我其实不确定真实性/可靠性。你自己需要确认一下。我感觉应该是叫做intra-kernel 和 inter-kernel 的同步管理，可能他的能力确实比你的少，但是你现在的总结还是太乱了。
+```

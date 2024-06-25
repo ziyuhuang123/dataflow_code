@@ -30,7 +30,7 @@
 // #endif 
 
 #include<cusync/cusync.h>
-
+#include <fstream>
 using namespace cusync;
 
 const uint Opts = 
@@ -93,6 +93,31 @@ using SmArch = cutlass::arch::Sm80;
 #pragma message "Invalid CUDA ARCH" XSTR(__CUDA_ARCH__)
 #error "Invalid CUDA ARCH"
 #endif
+
+
+#include <cstdlib>  // 包含 srand() 和 rand()
+#include <cassert>
+#include <cuda_fp16.h>
+#include <cublas_v2.h>
+#include <cuda_runtime.h>
+
+// Utility to check CUDA and cuBLAS functions return values
+#define CHECK_CUDA_ERROR(call) { \
+    cudaError_t err = call; \
+    if (cudaSuccess != err) { \
+        fprintf(stderr, "CUDA Error: %s, in file %s, at line %d\n", cudaGetErrorString(err), __FILE__, __LINE__); \
+        exit(EXIT_FAILURE); \
+    } \
+}
+
+#define CHECK_CUBLAS_ERROR(call) { \
+    cublasStatus_t status = call; \
+    if (CUBLAS_STATUS_SUCCESS != status) { \
+        fprintf(stderr, "cuBLAS Error: %d, in file %s, at line %d\n", status, __FILE__, __LINE__); \
+        exit(EXIT_FAILURE); \
+    } \
+}
+
 
 template<typename TileOrder, uint GridN, uint TileM, uint TileN, uint stride>
 struct StridedSync {
@@ -233,9 +258,11 @@ struct MLPParameters {
   HostTensor w1; //[H, 4H/8] in GPT-3
   //xw1 = GeLU(x * w1)
   HostTensor xw1; //[B, 4 H / 8]
+  HostTensor xw1_cublas; //[B, 4 H / 8]
   HostTensor w2; //[4H/8, H] in GPT-3 and [H/3, H] in LLaMa
   //xw12 = xw1 * w2
   HostTensor xw12; //[B, H]
+  HostTensor xw12_cublas; //[B, H]
 
   //For LLaMa only
   HostTensor vw1; //[B, 2*H/3] in LLAMA
@@ -279,8 +306,10 @@ struct MLPParameters {
     x = HostTensor(gemm_size1.mk());
     w1 = HostTensor(gemm_size1.kn());
     xw1 = HostTensor(gemm_size1.mn());
+    xw1_cublas = HostTensor(gemm_size1.mn());
     w2 = HostTensor(gemm_size2.kn());
     xw12 = HostTensor(gemm_size2.mn());
+    xw12_cublas = HostTensor(gemm_size2.mn());
     ref_xw1 = HostTensor(gemm_size1.mn());
     ref_xw12 = HostTensor(gemm_size2.mn());
 
@@ -293,21 +322,35 @@ struct MLPParameters {
     checkResults = check;
   }
 
-  void initIns() {
+  void initIns() {  
+    srand(12345);  // 设置随机种子为固定值，确保每次运行结果相同
     if (checkResults) {
-      ElementOutput values[5] = {ElementOutput(0.05), ElementOutput(0.3),
+      // ElementOutput values[5] = {ElementOutput(0.05), ElementOutput(0.3),
+      //                            ElementOutput(0.1), ElementOutput(0.06),
+      //                            ElementOutput(0.04)};
+      // memset_random(x.host_data(), 5, values, x.size());
+      // memset_random(w1.host_data(), 5, values, w1.size());
+      // memset_random2(w2.host_data(), ElementOutput(0.01), ElementOutput(0.05), w2.size());
+      ElementOutput values[5] = {ElementOutput(0.1), ElementOutput(0.08),
                                  ElementOutput(0.1), ElementOutput(0.06),
                                  ElementOutput(0.04)};
       memset_random(x.host_data(), 5, values, x.size());
       memset_random(w1.host_data(), 5, values, w1.size());
-      memset_random2(w2.host_data(), ElementOutput(0.01), ElementOutput(0.05), w2.size());
+      memset_random(w2.host_data(), 5, values, w1.size());
+
       if (model == "llama") {
         memset_random2(vw1.host_data(), ElementOutput(0.01), ElementOutput(0.2), vw1.size());
       }
     } else {
-      cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(0.05));
-      cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.5));
-      cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.01));
+      // cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(0.05));
+      // cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.5));
+      // cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.01));
+
+      cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(0.1));
+      cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.1));
+      cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.1));
+
+
       if (model == "llama") {
         cutlass::reference::host::TensorFill(vw1.host_view(), ElementOutput(0.5));
       }
@@ -323,10 +366,15 @@ struct MLPParameters {
   
   void initOuts() {
     cutlass::reference::host::TensorFill(xw1.host_view());
+    cutlass::reference::host::TensorFill(xw1_cublas.host_view());
     cutlass::reference::host::TensorFill(xw12.host_view());
-      
+    cutlass::reference::host::TensorFill(xw12_cublas.host_view());
+
     xw1.sync_device();
+    xw1_cublas.sync_device();
     xw12.sync_device();
+    xw12_cublas.sync_device();
+
     if (model == "llama") {
       cutlass::reference::host::TensorFill(xvw1.host_view());
       xvw1.sync_device();
@@ -412,6 +460,7 @@ cudaError_t checkMLPResults(MLPParameters& mlpParams) {
     return cudaErrorUnknown;
   }
   printf("First GeMM passed\n");
+
   ElementOutput* hostE = new ElementOutput[mlpParams.ref_xw12.size()];
   CUDA_CHECK(cudaMemcpy(hostE, mlpParams.xw12.device_data(), 
                         mlpParams.xw12.size() * sizeof(ElementOutput), 
@@ -428,6 +477,52 @@ cudaError_t checkMLPResults(MLPParameters& mlpParams) {
 
   return cudaSuccess;
 }
+
+
+cudaError_t checkMLPResults_cublas(MLPParameters& mlpParams) {
+
+    ElementOutput* hostC = new ElementOutput[mlpParams.xw1.size()];
+    CUDA_CHECK(cudaMemcpy(hostC, mlpParams.xw1.device_data(), 
+                          mlpParams.xw1.size() * sizeof(ElementOutput), 
+                          cudaMemcpyDeviceToHost));
+
+    ElementOutput* hostC_cublas = new ElementOutput[mlpParams.xw1_cublas.size()];
+    CUDA_CHECK(cudaMemcpy(hostC_cublas, mlpParams.xw1_cublas.device_data(), 
+                          mlpParams.xw1_cublas.size() * sizeof(ElementOutput), 
+                          cudaMemcpyDeviceToHost));
+
+    printf("Checking first GeMM\n");
+    bool eq = equals(mlpParams.xw1_cublas.size(), hostC_cublas, hostC, 1e-1f);
+    if (!eq) {
+        printf("First GeMM not correct\n");
+        printf("Expected first element: %f, Received first element: %f\n",
+               static_cast<float>(hostC[0]),  // 假设 ElementOutput 可以转换为 float 进行打印
+               static_cast<float>(hostC_cublas[0]));
+        return cudaErrorUnknown;
+    }
+    printf("cublas First GeMM passed\n");
+
+    ElementOutput* hostE = new ElementOutput[mlpParams.xw12.size()];
+    CUDA_CHECK(cudaMemcpy(hostE, mlpParams.xw12.device_data(), 
+                          mlpParams.xw12.size() * sizeof(ElementOutput), 
+                          cudaMemcpyDeviceToHost));
+
+    ElementOutput* hostE_cublas = new ElementOutput[mlpParams.xw12_cublas.size()];
+    CUDA_CHECK(cudaMemcpy(hostE_cublas, mlpParams.xw12_cublas.device_data(), 
+                          mlpParams.xw12_cublas.size() * sizeof(ElementOutput), 
+                          cudaMemcpyDeviceToHost));
+    printf("Checking second GeMM\n");
+    eq = equals(mlpParams.xw12_cublas.size(), hostE_cublas, hostE, 1e-1f);
+    if (!eq) {
+        printf("Second GeMM not correct\n");
+        return cudaErrorUnknown;
+    }
+    printf("cublas Second GeMM passed\n");
+    return cudaSuccess;
+}
+
+
+
 
 /*GPT3 Baseline MLP*/
 template<typename GemmTy1, typename GemmTy2>
@@ -660,6 +755,48 @@ cudaError_t runBaselineLLaMA(int split_k1, int split_k2,
   }
 
   return result;
+}
+
+
+void run_cublasGPT3(
+    MLPParameters& mlpParams  // 添加 MLPParameters 参数以访问 tensor 数据
+) {
+    cublasHandle_t handle;
+    CHECK_CUBLAS_ERROR(cublasCreate(&handle));
+
+    // First GEMM: xw1 = x * w1
+
+    int m = mlpParams.gemm_size1.m();
+    int n = mlpParams.gemm_size1.n();
+    int k = mlpParams.gemm_size1.k();
+    half alpha = __float2half(1.0f);
+    half beta = __float2half(0.0f);
+
+    // 确保您的矩阵数据是 half 类型
+    half *d_A1 = reinterpret_cast<half*>(mlpParams.x.device_data());  // 转换为 half*
+    half *d_B1 = reinterpret_cast<half*>(mlpParams.w1.device_data()); // 转换为 half*
+    half *d_C1 = reinterpret_cast<half*>(mlpParams.xw1_cublas.device_data()); // 转换为 half*
+
+    // 执行矩阵乘法
+    cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, n, m, k, &alpha, d_B1, k, d_A1, m, &beta, d_C1, n);
+
+    // cudaDeviceSynchronize();
+    int m2 = mlpParams.gemm_size2.m();
+    int n2 = mlpParams.gemm_size2.n();
+    int k2 = mlpParams.gemm_size2.k();
+
+    // 注意这里假设您已经确认过这些矩阵都是half类型
+    // half *d_A2 = reinterpret_cast<half*>(mlpParams.xw1_cublas.device_data()); // xw1 作为第二次 GEMM 的 A 矩阵
+    half *d_A2 = d_C1;
+    half *d_B2 = reinterpret_cast<half*>(mlpParams.w2.device_data());         // w2 作为第二次 GEMM 的 B 矩阵
+    half *d_C2 = reinterpret_cast<half*>(mlpParams.xw12_cublas.device_data()); // xw12 作为第二次 GEMM 的 C 矩阵
+
+
+    // 矩阵乘法 C = A * B
+    cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, n2, m2, k2, &alpha, d_B2, k2, d_A2, m2, &beta, d_C2, n2);
+
+    // Clean up
+    CHECK_CUBLAS_ERROR(cublasDestroy(handle));
 }
 
 template <typename Operator>
@@ -1034,7 +1171,22 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2, MLPParameters& mlpParams,
 
 //   return result;
 // }
+// Utility function to save matrix data to file
+void saveMatrixToFile(const std::vector<float>& matrix, const int rows, const int cols, const std::string& filename) {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file: " << filename << std::endl;
+        return;
+    }
 
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            file << matrix[i * cols + j] << (j < cols - 1 ? ", " : "\n");
+        }
+    }
+
+    file.close();
+}
 int run(int argc, char* argv[]) {
   cudaDeviceProp props;
 
@@ -1148,7 +1300,7 @@ int run(int argc, char* argv[]) {
                              baselineTime, matmul1Time, softmaxTime, matmul2Time, 1);
 
     CUDA_CHECK(cudaDeviceSynchronize());
-    printf("990 line\n");
+
     if (doChecking) {
       result = checkMLPResults(mlpParams);
       if (result != cudaSuccess) {
@@ -1171,7 +1323,7 @@ int run(int argc, char* argv[]) {
                               producer_stream2, baselineTime, matmul1Time, softmaxTime, matmul2Time, 1);
 
     CUDA_CHECK(cudaDeviceSynchronize());
-    printf("1013 line\n");
+
     if (doChecking) {
       result = checkMLPResults(mlpParams);
       if (result != cudaSuccess) {
@@ -1238,16 +1390,17 @@ int run(int argc, char* argv[]) {
     double overlapTime = 0;
     
     result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, 1);
+    
 
     CUDA_CHECK(cudaDeviceSynchronize());
-    printf("1082 line\n");
+
     if (doChecking) {
       result = checkMLPResults(mlpParams);
       if (result != cudaSuccess) {
         return 1;
       }
     }
-    printf("1089 line\n");
+
     result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, warmup);
     
     CUDA_CHECK(cudaDeviceSynchronize());
@@ -1258,6 +1411,10 @@ int run(int argc, char* argv[]) {
     CUDA_CHECK(result);
     printf("END-OVERLAPPED:\n");
     
+    CUDA_CHECK(cudaDeviceSynchronize());
+    run_cublasGPT3(mlpParams); 
+    checkMLPResults_cublas(mlpParams);
+
     printf("Average time %lf microseconds\n", overlapTime/(float)epochs);
   }
   //  else if (mlpParams.isLLaMa()) {

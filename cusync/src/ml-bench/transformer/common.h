@@ -182,6 +182,7 @@ void memset_random(T*f, int numVals, T* values, size_t nelems)
   assert(f != nullptr);
   for (uint64_t i = 0; i < nelems; i++) {
     f[i] =  values[rand()%numVals];
+    // f[i] =  values[0];
   }
 
   // CUDA_CHECK(cudaMemcpy(f, h_buff, sizeof(T)*nelems, cudaMemcpyHostToDevice));

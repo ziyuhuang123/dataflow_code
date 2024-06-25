@@ -29,7 +29,7 @@ int main() {
     const int M1 = 16, N1 = 14336, K1 = 4096;
     const int M2 = 14336, N2 = 4096, K2 = 14336;
 
-    const int iterations = 20;
+    const int iterations = 2000;
 
     // Allocate host memory
     half *h_A1 = new half[M1 * K1];
@@ -89,9 +89,6 @@ int main() {
                                         &beta,
                                         d_C1, CUDA_R_16F, N1,
                                         CUDA_R_16F, CUBLAS_GEMM_DEFAULT_TENSOR_OP));
-
-        // Synchronize to ensure the first GEMM is complete
-        CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
         // Second GEMM: d_C2 = d_C1 * d_B2
         CHECK_CUBLAS_ERROR(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N,
