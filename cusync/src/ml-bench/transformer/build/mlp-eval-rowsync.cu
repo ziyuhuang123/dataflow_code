@@ -70,13 +70,18 @@ const int NumStages1 = 3;
 const int NumStages2 = 3;
 #else
 //<eval tiles>
+// using ShapeThreadBlock1 = cutlass::gemm::GemmShape<64, 64, 32>;
+// using ShapeWarp1 = cutlass::gemm::GemmShape<32, 32, 32>;
+// using ShapeThreadBlock2 = cutlass::gemm::GemmShape<64, 64, 32>;
+// using ShapeWarp2 = cutlass::gemm::GemmShape<32, 32, 32>;
+// const uint NumStages1 = 1;
+// const uint NumStages2 = 1;
 using ShapeThreadBlock1 = cutlass::gemm::GemmShape<128, 128, 32>;
 using ShapeWarp1 = cutlass::gemm::GemmShape<64, 64, 32>;
 using ShapeThreadBlock2 = cutlass::gemm::GemmShape<128, 128, 32>;
 using ShapeWarp2 = cutlass::gemm::GemmShape<64, 64, 32>;
 const uint NumStages1 = 3;
 const uint NumStages2 = 3;
-
 //</eval tiles>
 #endif
 
@@ -332,7 +337,7 @@ struct MLPParameters {
       // memset_random(w1.host_data(), 5, values, w1.size());
       // memset_random2(w2.host_data(), ElementOutput(0.01), ElementOutput(0.05), w2.size());
       ElementOutput values[5] = {ElementOutput(0.1), ElementOutput(0.08),
-                                 ElementOutput(0.1), ElementOutput(0.06),
+                                 ElementOutput(0.01), ElementOutput(0.06),
                                  ElementOutput(0.04)};
       memset_random(x.host_data(), 5, values, x.size());
       memset_random(w1.host_data(), 5, values, w1.size());
@@ -346,9 +351,9 @@ struct MLPParameters {
       // cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.5));
       // cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.01));
 
-      cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(0.1));
-      cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.1));
-      cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.1));
+      cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(0.01));
+      cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.01));
+      cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.01));
 
 
       if (model == "llama") {
@@ -455,8 +460,12 @@ cudaError_t checkMLPResults(MLPParameters& mlpParams) {
                         cudaMemcpyDeviceToHost));
   printf("Checking first GeMM\n");
   bool eq = equals(mlpParams.ref_xw1.size(), mlpParams.ref_xw1.host_data(), hostC, 1e-1f);
+  // bool eq = equals(mlpParams.ref_xw1.size(), mlpParams.ref_xw1.host_data(), hostC, 1);
   if (eq == false) {
     printf("First GeMM not correct\n");
+    printf("Expected first element: %f, Received first element: %f\n",
+           static_cast<float>(mlpParams.ref_xw1.host_data()[0]),  // 假设 ElementOutput 可以转换为 float 进行打印
+           static_cast<float>(hostC[0]));
     return cudaErrorUnknown;
   }
   printf("First GeMM passed\n");
@@ -468,6 +477,7 @@ cudaError_t checkMLPResults(MLPParameters& mlpParams) {
   //For LLaMa not checking XV
   printf("Checking second GeMM\n");
   eq = equals(mlpParams.ref_xw12.size(), mlpParams.ref_xw12.host_data(), hostE, 1e-1f);
+  // eq = equals(mlpParams.ref_xw12.size(), mlpParams.ref_xw12.host_data(), hostE, 1);
   if (eq == false) {
     printf("Second GeMM not correct \n");
     return cudaErrorUnknown;
@@ -493,11 +503,12 @@ cudaError_t checkMLPResults_cublas(MLPParameters& mlpParams) {
 
     printf("Checking first GeMM\n");
     bool eq = equals(mlpParams.xw1_cublas.size(), hostC_cublas, hostC, 1e-1f);
+    printf("Cublas Expected first element: %f, Received first element: %f\n",
+               static_cast<float>(hostC[0]), static_cast<float>(hostC_cublas[0]));
     if (!eq) {
         printf("First GeMM not correct\n");
         printf("Expected first element: %f, Received first element: %f\n",
-               static_cast<float>(hostC[0]),  // 假设 ElementOutput 可以转换为 float 进行打印
-               static_cast<float>(hostC_cublas[0]));
+               static_cast<float>(hostC[0]), static_cast<float>(hostC_cublas[0]));
         return cudaErrorUnknown;
     }
     printf("cublas First GeMM passed\n");
@@ -759,7 +770,7 @@ cudaError_t runBaselineLLaMA(int split_k1, int split_k2,
 
 
 void run_cublasGPT3(
-    MLPParameters& mlpParams  // 添加 MLPParameters 参数以访问 tensor 数据
+    MLPParameters& mlpParams, int iterations
 ) {
     cublasHandle_t handle;
     CHECK_CUBLAS_ERROR(cublasCreate(&handle));
@@ -778,22 +789,66 @@ void run_cublasGPT3(
     half *d_C1 = reinterpret_cast<half*>(mlpParams.xw1_cublas.device_data()); // 转换为 half*
 
     // 执行矩阵乘法
-    cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, n, m, k, &alpha, d_B1, k, d_A1, m, &beta, d_C1, n);
-
-    // cudaDeviceSynchronize();
-    int m2 = mlpParams.gemm_size2.m();
-    int n2 = mlpParams.gemm_size2.n();
-    int k2 = mlpParams.gemm_size2.k();
-
-    // 注意这里假设您已经确认过这些矩阵都是half类型
-    // half *d_A2 = reinterpret_cast<half*>(mlpParams.xw1_cublas.device_data()); // xw1 作为第二次 GEMM 的 A 矩阵
-    half *d_A2 = d_C1;
-    half *d_B2 = reinterpret_cast<half*>(mlpParams.w2.device_data());         // w2 作为第二次 GEMM 的 B 矩阵
-    half *d_C2 = reinterpret_cast<half*>(mlpParams.xw12_cublas.device_data()); // xw12 作为第二次 GEMM 的 C 矩阵
+    // cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, n, m, k, &alpha, d_B1, k, d_A1, m, &beta, d_C1, n);
 
 
-    // 矩阵乘法 C = A * B
-    cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, n2, m2, k2, &alpha, d_B2, k2, d_A2, m2, &beta, d_C2, n2);
+    float execTime = 0;
+    cudaEvent_t start, end;
+    CUDA_CHECK(cudaEventCreate(&start));
+    CUDA_CHECK(cudaEventCreate(&end));
+    CUDA_CHECK(cudaEventRecord(start, 0));
+
+    for (int r = 0; r < iterations; r++) {
+      // 调用 cublasGemmEx 来进行矩阵乘法
+      CHECK_CUBLAS_ERROR(cublasGemmEx(
+          handle,
+          CUBLAS_OP_T, CUBLAS_OP_T,       // 转置 A 和 B
+          n, m, k,                        // 转置后的维度
+          &alpha,                         // 乘法的 alpha 系数
+          d_B1, CUDA_R_16F, k,            // B 矩阵和其 leading dimension
+          d_A1, CUDA_R_16F, m,            // A 矩阵和其 leading dimension
+          &beta,                          // 加法的 beta 系数
+          d_C1, CUDA_R_16F, n,            // C 矩阵和其 leading dimension
+          CUDA_R_16F,                     // 计算使用的数据类型
+          CUBLAS_GEMM_DEFAULT_TENSOR_OP   // 使用默认算法，允许 Tensor Cores
+      ));
+
+
+      // cudaDeviceSynchronize();
+      int m2 = mlpParams.gemm_size2.m();
+      int n2 = mlpParams.gemm_size2.n();
+      int k2 = mlpParams.gemm_size2.k();
+
+      // 注意这里假设您已经确认过这些矩阵都是half类型
+      // half *d_A2 = reinterpret_cast<half*>(mlpParams.xw1_cublas.device_data()); // xw1 作为第二次 GEMM 的 A 矩阵
+      half *d_A2 = d_C1;
+      half *d_B2 = reinterpret_cast<half*>(mlpParams.w2.device_data());         // w2 作为第二次 GEMM 的 B 矩阵
+      half *d_C2 = reinterpret_cast<half*>(mlpParams.xw12_cublas.device_data()); // xw12 作为第二次 GEMM 的 C 矩阵
+
+
+      // 矩阵乘法 C = A * B
+      // cublasHgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, n2, m2, k2, &alpha, d_B2, k2, d_A2, m2, &beta, d_C2, n2);
+
+      CHECK_CUBLAS_ERROR(cublasGemmEx(
+          handle,
+          CUBLAS_OP_T, CUBLAS_OP_T,  // 两个矩阵都不转置
+          n2, m2, k2,                // 矩阵维度
+          &alpha,                    // 乘法因子
+          d_B2, CUDA_R_16F, k2,      // B 矩阵和其前导维度
+          d_A2, CUDA_R_16F, m2,      // A 矩阵和其前导维度
+          &beta,                     // 加法因子
+          d_C2, CUDA_R_16F, n2,      // C 矩阵和其前导维度
+          CUDA_R_16F,                // 计算的数据类型
+          CUBLAS_GEMM_DEFAULT_TENSOR_OP  // 使用默认算法，可能包括 Tensor Cores
+      ));
+    }
+
+    CUDA_CHECK(cudaEventRecord(end, 0));
+    CUDA_CHECK(cudaEventSynchronize(end));
+    float time_ms = 0;
+    CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, end));
+    execTime += time_ms*1000.0f;
+    printf("cublas avg run time: %f\n", execTime/iterations);
 
     // Clean up
     CHECK_CUBLAS_ERROR(cublasDestroy(handle));
@@ -958,9 +1013,9 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
     args2.problem_size, 
     {ShapeThreadBlock2::kM, ShapeThreadBlock2::kN, ShapeThreadBlock2::kK},
     args2.split_k_slices);
+  printf("grid_shape1.m=%d, grid_shape1.n=%d,grid_shape1.k=%d,grid_shape2.m=%d, grid_shape2.n=%d,grid_shape2.k=%d\n", grid_shape1.m(),grid_shape1.n(),grid_shape1.k(),grid_shape2.m(),grid_shape2.n(),grid_shape2.k());
 
-
-  // typename GemmKernel::Params<ProdCuStage> params_{
+// typename GemmKernel::Params<ProdCuStage> params_{
   //   prod,
   //   args1.problem_size,
   //   grid_shape,
@@ -978,9 +1033,9 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   //   0
   // };
 
-  typename GemmKernel::Params<ProdCuStage> prod_params{prod, args1.problem_size, grid_shape1, args1.ref_A.non_const_ref(), args1.ref_B.non_const_ref(), args1.ref_C.non_const_ref(), args1.ref_D, args1.epilogue, reinterpret_cast<int *>(workspace1.get()), args1.gather_A_indices, args1.gather_B_indices, args1.scatter_D_indices, 0, 112, 2, 0};
+  typename GemmKernel::Params<ProdCuStage> prod_params{prod, args1.problem_size, grid_shape1, args1.ref_A.non_const_ref(), args1.ref_B.non_const_ref(), args1.ref_C.non_const_ref(), args1.ref_D, args1.epilogue, reinterpret_cast<int *>(workspace1.get()), args1.gather_A_indices, args1.gather_B_indices, args1.scatter_D_indices, 0, grid_shape1.n(), 2, 0};
 
-  typename GemmKernel::Params<ConsCuStage> cons_params{cons, args2.problem_size, grid_shape2, args2.ref_A.non_const_ref(), args2.ref_B.non_const_ref(), args2.ref_C.non_const_ref(), args2.ref_D, {mlpParams.alpha, mlpParams.beta}, reinterpret_cast<int *>(workspace2.get()), args2.gather_A_indices, args2.gather_B_indices, args2.scatter_D_indices, 112, 144, 2, 1};
+  typename GemmKernel::Params<ConsCuStage> cons_params{cons, args2.problem_size, grid_shape2, args2.ref_A.non_const_ref(), args2.ref_B.non_const_ref(), args2.ref_C.non_const_ref(), args2.ref_D, {mlpParams.alpha, mlpParams.beta}, reinterpret_cast<int *>(workspace2.get()), args2.gather_A_indices, args2.gather_B_indices, args2.scatter_D_indices, grid_shape1.n(), grid_shape1.n()+grid_shape2.n(), 2, 1};
 
 
   // 创建包含 prod_params 和 cons_params 的数组
@@ -996,12 +1051,13 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
 
   // dim3 grid = cuSyncGeMMSwizzle.get_grid_shape(params_.grid_tiled_shape);
   // dim3 block(GemmKernel::kThreadCount, 1, 1);
-  dim3 grid = {144, 1, 1};
+  dim3 grid = {grid_shape1.n()+grid_shape2.n(), 1, 1};
   // dim3 block = {128, 1, 1};
   dim3 block(GemmKernel::kThreadCount, 1, 1);
   printf("GemmKernel::kThreadCount=%d\n",GemmKernel::kThreadCount);  // 验证了一下确实是256
-  int smem_size = 49 << 10;  // ????
 
+  int smem_size = 99 << 10;  // ????
+  // int smem_size = 8 << 10;  // ????
 
   cudaFuncSetAttribute(AllKernel<GemmKernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
 
@@ -1277,7 +1333,7 @@ int run(int argc, char* argv[]) {
   mlpParams.initRefs();
   
   cudaError_t result;
-  int epochs = 1;
+  int epochs = 200;
   int warmup = 1;
 
   if (doChecking) {
@@ -1412,7 +1468,7 @@ int run(int argc, char* argv[]) {
     printf("END-OVERLAPPED:\n");
     
     CUDA_CHECK(cudaDeviceSynchronize());
-    run_cublasGPT3(mlpParams); 
+    run_cublasGPT3(mlpParams, epochs); 
     checkMLPResults_cublas(mlpParams);
 
     printf("Average time %lf microseconds\n", overlapTime/(float)epochs);

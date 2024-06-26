@@ -27,9 +27,9 @@ void initialize_matrix(half *matrix, int rows, int cols) {
 
 int main() {
     const int M1 = 16, N1 = 14336, K1 = 4096;
-    const int M2 = 14336, N2 = 4096, K2 = 14336;
+    const int M2 = 16, N2 = 4096, K2 = 14336;
 
-    const int iterations = 2000;
+    const int iterations = 1;
 
     // Allocate host memory
     half *h_A1 = new half[M1 * K1];
@@ -37,7 +37,7 @@ int main() {
     half *h_C1 = new half[M1 * N1];
 
     half *h_B2 = new half[K2 * N2];
-    half *h_C2 = new half[M1 * N2];
+    half *h_C2 = new half[M2 * N2];
 
     // Initialize matrices
     initialize_matrix(h_A1, M1, K1);
@@ -53,7 +53,7 @@ int main() {
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_C1, M1 * N1 * sizeof(half)));
 
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_B2, K2 * N2 * sizeof(half)));
-    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_C2, M1 * N2 * sizeof(half)));
+    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_C2, M2 * N2 * sizeof(half)));
 
     // Copy data to device
     CHECK_CUDA_ERROR(cudaMemcpy(d_A1, h_A1, M1 * K1 * sizeof(half), cudaMemcpyHostToDevice));
@@ -80,25 +80,24 @@ int main() {
     CHECK_CUDA_ERROR(cudaEventRecord(start, 0));
 
     for (int i = 0; i < iterations; ++i) {
-        // First GEMM: d_C1 = d_A1 * d_B1
-        CHECK_CUBLAS_ERROR(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+        CHECK_CUBLAS_ERROR(cublasGemmEx(handle, CUBLAS_OP_T, CUBLAS_OP_T,
                                         N1, M1, K1,
                                         &alpha,
-                                        d_B1, CUDA_R_16F, N1,
-                                        d_A1, CUDA_R_16F, K1,
+                                        d_B1, CUDA_R_16F, K1,
+                                        d_A1, CUDA_R_16F, M1,
                                         &beta,
                                         d_C1, CUDA_R_16F, N1,
                                         CUDA_R_16F, CUBLAS_GEMM_DEFAULT_TENSOR_OP));
 
         // Second GEMM: d_C2 = d_C1 * d_B2
-        CHECK_CUBLAS_ERROR(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N,
-                                        N2, M1, K2,
+        CHECK_CUBLAS_ERROR(cublasGemmEx(handle, CUBLAS_OP_T, CUBLAS_OP_T,
+                                        N2, M2, K2,
                                         &alpha,
-                                        d_B2, CUDA_R_16F, N2,
-                                        d_C1, CUDA_R_16F, K2,
+                                        d_B2, CUDA_R_16F, K2,
+                                        d_C1, CUDA_R_16F, M2,
                                         &beta,
                                         d_C2, CUDA_R_16F, N2,
-                                        CUDA_R_16F, CUBLAS_GEMM_DEFAULT_TENSOR_OP));
+                                        CUDA_R_16F, CUBLAS_GEMM_DEFAULT_TENSOR_OP)); 
     }
 
     // Record the stop event
