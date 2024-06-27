@@ -74,14 +74,16 @@ const int NumStages2 = 3;
 // using ShapeWarp1 = cutlass::gemm::GemmShape<32, 32, 32>;
 // using ShapeThreadBlock2 = cutlass::gemm::GemmShape<64, 64, 32>;
 // using ShapeWarp2 = cutlass::gemm::GemmShape<32, 32, 32>;
-// const uint NumStages1 = 1;
-// const uint NumStages2 = 1;
-using ShapeThreadBlock1 = cutlass::gemm::GemmShape<128, 128, 32>;
-using ShapeWarp1 = cutlass::gemm::GemmShape<64, 64, 32>;
-using ShapeThreadBlock2 = cutlass::gemm::GemmShape<128, 128, 32>;
-using ShapeWarp2 = cutlass::gemm::GemmShape<64, 64, 32>;
-const uint NumStages1 = 3;
-const uint NumStages2 = 3;
+// const uint NumStages1 = 5;
+// const uint NumStages2 = 5;
+using ShapeThreadBlock1 = cutlass::gemm::GemmShape<64, 64, 32>;  
+using ShapeWarp1 = cutlass::gemm::GemmShape<32, 32, 32>;
+using ShapeThreadBlock2 = cutlass::gemm::GemmShape<64, 64, 32>;  
+using ShapeWarp2 = cutlass::gemm::GemmShape<32, 32, 32>;
+const uint NumStages1 = 4;
+const uint NumStages2 = 4;
+
+
 //</eval tiles>
 #endif
 
@@ -295,6 +297,8 @@ struct MLPParameters {
     model = model_;
 
     if (model == "gpt3") {
+      // gemm_size1 = cutlass::gemm::GemmCoord(batch, 128, 128);
+      // gemm_size2 = cutlass::gemm::GemmCoord(batch, 128, 128);
       gemm_size1 = cutlass::gemm::GemmCoord(batch, 14336, 4096);
       gemm_size2 = cutlass::gemm::GemmCoord(batch, 4096, 14336);
     } else if (model=="llama") {
@@ -330,30 +334,29 @@ struct MLPParameters {
   void initIns() {  
     srand(12345);  // 设置随机种子为固定值，确保每次运行结果相同
     if (checkResults) {
-      // ElementOutput values[5] = {ElementOutput(0.05), ElementOutput(0.3),
-      //                            ElementOutput(0.1), ElementOutput(0.06),
-      //                            ElementOutput(0.04)};
+      ElementOutput values[5] = {ElementOutput(1), ElementOutput(0.5),
+                                 ElementOutput(1), ElementOutput(0.06),
+                                 ElementOutput(0.04)};
       // memset_random(x.host_data(), 5, values, x.size());
       // memset_random(w1.host_data(), 5, values, w1.size());
-      // memset_random2(w2.host_data(), ElementOutput(0.01), ElementOutput(0.05), w2.size());
-      ElementOutput values[5] = {ElementOutput(0.1), ElementOutput(0.08),
-                                 ElementOutput(0.01), ElementOutput(0.06),
-                                 ElementOutput(0.04)};
-      memset_random(x.host_data(), 5, values, x.size());
-      memset_random(w1.host_data(), 5, values, w1.size());
-      memset_random(w2.host_data(), 5, values, w1.size());
+      // memset_random(w2.host_data(), 5, values, w1.size());
+      // memset_random(x.host_data(), 2, values, x.size());
+      // cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(1));
+      cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(0.1));
+      cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.1));
+      cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.1));
 
       if (model == "llama") {
         memset_random2(vw1.host_data(), ElementOutput(0.01), ElementOutput(0.2), vw1.size());
       }
     } else {
-      // cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(0.05));
-      // cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.5));
-      // cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.01));
-
       cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(0.01));
       cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.01));
       cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.01));
+
+      // cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(1));
+      // cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(2));
+      // cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(1));
 
 
       if (model == "llama") {
@@ -459,8 +462,8 @@ cudaError_t checkMLPResults(MLPParameters& mlpParams) {
                         mlpParams.xw1.size() * sizeof(ElementOutput), 
                         cudaMemcpyDeviceToHost));
   printf("Checking first GeMM\n");
-  bool eq = equals(mlpParams.ref_xw1.size(), mlpParams.ref_xw1.host_data(), hostC, 1e-1f);
-  // bool eq = equals(mlpParams.ref_xw1.size(), mlpParams.ref_xw1.host_data(), hostC, 1);
+  bool eq = equals(mlpParams.ref_xw1.size(), mlpParams.ref_xw1.host_data(), hostC, 1e-3f);
+  printf("cutlass-Expected first element: %f, My Received first element: %f\n", static_cast<float>(mlpParams.ref_xw1.host_data()[0]), static_cast<float>(hostC[0]));
   if (eq == false) {
     printf("First GeMM not correct\n");
     printf("Expected first element: %f, Received first element: %f\n",
@@ -476,8 +479,8 @@ cudaError_t checkMLPResults(MLPParameters& mlpParams) {
                         cudaMemcpyDeviceToHost));
   //For LLaMa not checking XV
   printf("Checking second GeMM\n");
-  eq = equals(mlpParams.ref_xw12.size(), mlpParams.ref_xw12.host_data(), hostE, 1e-1f);
-  // eq = equals(mlpParams.ref_xw12.size(), mlpParams.ref_xw12.host_data(), hostE, 1);
+  eq = equals(mlpParams.ref_xw12.size(), mlpParams.ref_xw12.host_data(), hostE, 1e-3f);
+  printf("cutlass-Expected first element: %f, My-Received first element: %f\n", static_cast<float>(mlpParams.ref_xw12.host_data()[0]), static_cast<float>(hostE[0]));
   if (eq == false) {
     printf("Second GeMM not correct \n");
     return cudaErrorUnknown;
@@ -502,8 +505,8 @@ cudaError_t checkMLPResults_cublas(MLPParameters& mlpParams) {
                           cudaMemcpyDeviceToHost));
 
     printf("Checking first GeMM\n");
-    bool eq = equals(mlpParams.xw1_cublas.size(), hostC_cublas, hostC, 1e-1f);
-    printf("Cublas Expected first element: %f, Received first element: %f\n",
+    bool eq = equals(mlpParams.xw1_cublas.size(), hostC_cublas, hostC, 1e-3f);
+    printf("My Expected first element: %f, cublas first element: %f\n",
                static_cast<float>(hostC[0]), static_cast<float>(hostC_cublas[0]));
     if (!eq) {
         printf("First GeMM not correct\n");
@@ -523,7 +526,7 @@ cudaError_t checkMLPResults_cublas(MLPParameters& mlpParams) {
                           mlpParams.xw12_cublas.size() * sizeof(ElementOutput), 
                           cudaMemcpyDeviceToHost));
     printf("Checking second GeMM\n");
-    eq = equals(mlpParams.xw12_cublas.size(), hostE_cublas, hostE, 1e-1f);
+    eq = equals(mlpParams.xw12_cublas.size(), hostE_cublas, hostE, 1e-3f);
     if (!eq) {
         printf("Second GeMM not correct\n");
         return cudaErrorUnknown;
@@ -578,43 +581,61 @@ cudaError_t runBaselineGPT3(int split_k1, int split_k2,
   status = gemm_op2.initialize(args2, workspace2.get());
   CUTLASS_CHECK(status);
   
-  execTime = 0;
-  cudaStream_t stream2;
-  CUDA_CHECK(cudaStreamCreate(&stream2));
+  // execTime = 0;
+  // cudaStream_t stream2;
+  // CUDA_CHECK(cudaStreamCreate(&stream2));
 
-  cudaEvent_t start, end, middle;
-  CUDA_CHECK(cudaEventCreate(&start));
-  CUDA_CHECK(cudaEventCreate(&end));
-  CUDA_CHECK(cudaEventCreate(&middle));
+  // cudaEvent_t start, end, middle;
+  // CUDA_CHECK(cudaEventCreate(&start));
+  // CUDA_CHECK(cudaEventCreate(&end));
+  // CUDA_CHECK(cudaEventCreate(&middle));
 
   //Run kernels
+  // for (int r = 0; r < iters; r++) {    
+  //   CUDA_CHECK(cudaEventRecord(start, stream));
+  //   status = gemm_op1(stream);
+  //   CUTLASS_CHECK(status);
+  //   CUDA_CHECK(cudaEventRecord(middle, stream));
+
+  //   status = gemm_op2(stream);
+  //   CUTLASS_CHECK(status);
+  //   CUDA_CHECK(cudaEventRecord(end, stream));
+  //   CUDA_CHECK(cudaEventSynchronize(end));
+
+  //   float iterMatMul1 = 0;
+  //   CUDA_CHECK(cudaEventElapsedTime(&iterMatMul1, start, middle));
+  //   matmul1Time += iterMatMul1;
+  //   float iterMatMul2 = 0;
+  //   CUDA_CHECK(cudaEventElapsedTime(&iterMatMul2, middle, end));
+  //   matmul2Time += iterMatMul2;
+
+  //   float end_to_start = 0;
+  //   CUDA_CHECK(cudaEventElapsedTime(&end_to_start, start, end));
+
+  //   if (iters == 20)
+  //     printf("{\"Total\": %lf, \"matmul1Time\": %lf, \"matmul2Time\": %lf}\n", 
+  //            end_to_start * 1000.0f, iterMatMul1*1000.0f, iterMatMul2*1000.0f);
+  //   execTime += end_to_start * 1000.0f;
+  // }
+
+  execTime = 0;
+  cudaEvent_t start, end;
+  CUDA_CHECK(cudaEventCreate(&start));
+  CUDA_CHECK(cudaEventCreate(&end));
+  CUDA_CHECK(cudaEventRecord(start, 0));
+
   for (int r = 0; r < iters; r++) {    
-    CUDA_CHECK(cudaEventRecord(start, stream));
     status = gemm_op1(stream);
-    CUTLASS_CHECK(status);
-    CUDA_CHECK(cudaEventRecord(middle, stream));
-
     status = gemm_op2(stream);
-    CUTLASS_CHECK(status);
-    CUDA_CHECK(cudaEventRecord(end, stream));
-    CUDA_CHECK(cudaEventSynchronize(end));
-
-    float iterMatMul1 = 0;
-    CUDA_CHECK(cudaEventElapsedTime(&iterMatMul1, start, middle));
-    matmul1Time += iterMatMul1;
-    float iterMatMul2 = 0;
-    CUDA_CHECK(cudaEventElapsedTime(&iterMatMul2, middle, end));
-    matmul2Time += iterMatMul2;
-
-    float end_to_start = 0;
-    CUDA_CHECK(cudaEventElapsedTime(&end_to_start, start, end));
-
-    if (iters == 20)
-      printf("{\"Total\": %lf, \"matmul1Time\": %lf, \"matmul2Time\": %lf}\n", 
-             end_to_start * 1000.0f, iterMatMul1*1000.0f, iterMatMul2*1000.0f);
-    execTime += end_to_start * 1000.0f;
   }
 
+  CUDA_CHECK(cudaEventRecord(end, 0));
+  CUDA_CHECK(cudaEventSynchronize(end));
+  CUTLASS_CHECK(status);
+  float time_ms = 0;
+  CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, end));
+  execTime += time_ms*1000.0f;
+  printf("Cutlass avg run time: %f\n", execTime/iters);
   return cudaSuccess;
 }
 
@@ -639,130 +660,6 @@ cudaError_t runBaselineGPT3(int split_k1, int split_k2,
     result = runBaselineGPT3<Gemm1, GemmSplitK2>(split_k1, split_k2, mlpParams, stream, execTime, matmul1Time, softmaxTime, matmul2Time, iters);
   } else {
     result = runBaselineGPT3<GemmSplitK1, GemmSplitK2>(split_k1, split_k2, mlpParams, stream, execTime, matmul1Time, softmaxTime, matmul2Time, iters);
-  }
-
-  return result;
-}
-
-/*LLaMA Baseline MLP*/
-template<typename T, uint H3>
-__global__ void gluKernel(T* xvw1, T* glu) {
-  int ROW = blockIdx.x;
-
-  for (int i = threadIdx.x; i < H3; i += blockDim.x) {
-    float xw1 = xvw1[ROW * (2 * H3) + i];
-    float xv =  xvw1[ROW * (2 * H3) + i + H3];
-    glu[ROW * H3 + i] = xw1 * xv;
-  }
-}
-
-template<typename GemmTy1, typename GemmTy2>
-cudaError_t runBaselineLLaMA(int split_k1, int split_k2, 
-                             MLPParameters& mlpParams,
-                             cudaStream_t stream1,
-                             cudaStream_t stream2,
-                             double& execTime, double& matmul1Time, 
-                             double& matmul2Time, double& matmul3Time,
-                             int iters = 100) {
-  //Setup XW1 GeMM
-  typename GemmTy1::Arguments argsXW1{
-    mlpParams.gemm_size1,
-    mlpParams.x.device_ref(), 
-    mlpParams.w1.device_ref(),
-    mlpParams.xvw1.device_ref(),
-    mlpParams.xvw1.device_ref(),
-    {mlpParams.alpha, mlpParams.beta},
-    split_k1};
-
-  size_t workspace_size = GemmTy1::get_workspace_size(argsXW1);
-  cutlass::device_memory::allocation<uint8_t> workspace1(workspace_size);
-  GemmTy1 gemm_opXVW1;
-  cutlass::Status status = gemm_opXVW1.can_implement(argsXW1);
-  CUTLASS_CHECK(status);
-  status = gemm_opXVW1.initialize(argsXW1, workspace1.get());
-  CUTLASS_CHECK(status);
-
-  //Setup XW12 GeMM
-  typename GemmTy2::Arguments argsXW12{
-    mlpParams.gemm_size2, 
-    mlpParams.glu.device_ref(), 
-    mlpParams.w2.device_ref(), 
-    mlpParams.xw12.device_ref(), 
-    mlpParams.xw12.device_ref(), 
-    {mlpParams.alpha, mlpParams.beta},         
-    split_k2};
-  
-  GemmTy2 gemm_opXW12;
-  workspace_size = GemmTy2::get_workspace_size(argsXW12);
-  cutlass::device_memory::allocation<uint8_t> workspace3(workspace_size);
-  status = gemm_opXW12.can_implement(argsXW12);
-  CUTLASS_CHECK(status);
-  status = gemm_opXW12.initialize(argsXW12, workspace3.get());
-  CUTLASS_CHECK(status);
-  
-  execTime = 0; 
-
-  //Run kernels
-  cudaEvent_t start, end, middle;
-  CUDA_CHECK(cudaEventCreate(&start));
-  CUDA_CHECK(cudaEventCreate(&end));
-  CUDA_CHECK(cudaEventCreate(&middle));
-  for (int r = 0; r < iters; r++) {    
-    CUDA_CHECK(cudaEventRecord(start, stream1));
-    status = gemm_opXVW1(stream1);
-    CUTLASS_CHECK(status);
-
-    CUDA_CHECK(cudaEventRecord(middle, stream1));
-
-    //glu
-    // gluKernel<half, ((8192/3+127)/128)*128><<<mlpParams.gemm_size1.m(), 
-    //                                           ShapeMMAThreadBlock::kN, 0, stream1>>>
-    //   ((half*)mlpParams.xvw1.device_data(), (half*)mlpParams.glu.device_data());
-    // CUDA_CHECK(cudaDeviceSynchronize());
-    status = gemm_opXW12(stream1);
-    CUDA_CHECK(cudaEventRecord(end, stream1));
-    CUDA_CHECK(cudaEventSynchronize(end));
-
-    float iterMatMul1 = 0;
-    CUDA_CHECK(cudaEventElapsedTime(&iterMatMul1, start, middle));
-    matmul1Time += iterMatMul1;
-    float iterMatMul2 = 0;
-    CUDA_CHECK(cudaEventElapsedTime(&iterMatMul2, middle, end));
-    matmul2Time += iterMatMul2;
-
-    float end_to_start = 0;
-    CUDA_CHECK(cudaEventElapsedTime(&end_to_start, start, end));
-    
-    if (iters > 10)
-      printf("{\"Total\": %lf, \"matmul1Time\": %lf, \"matmul2Time\": %lf}\n",end_to_start*1000.0f, iterMatMul1*1000.0f, iterMatMul2*1000.0f);
-    execTime +=end_to_start*1000.0f;
-  }
-
-  return cudaSuccess;
-}
-
-cudaError_t runBaselineLLaMA(int split_k1, int split_k2, 
-                        MLPParameters& mlpParams,
-                        cudaStream_t stream1,
-                        cudaStream_t stream2,
-                        double& execTime,
-                        double& matmul1Time,
-                        double& matmul2Time,
-                        double& matmul3Time,
-                        int iters = 100) {
-  cudaError_t result;
-  execTime = 0;
-  matmul1Time = 0;
-  matmul2Time = 0;
-  matmul3Time = 0;
-  if (split_k1 == 1 && split_k2 == 1) {
-    result = runBaselineLLaMA<Gemm1, Gemm2>(split_k1, split_k2, mlpParams, stream1, stream2, execTime, matmul1Time, matmul2Time, matmul3Time, iters);
-  } else if (split_k1 > 1 && split_k2 == 1) {
-    result = runBaselineLLaMA<GemmSplitK1, Gemm2>(split_k1, split_k2, mlpParams, stream1, stream2, execTime, matmul1Time, matmul2Time, matmul3Time, iters);
-  } else if (split_k1 == 1 && split_k2 > 1) {
-    result = runBaselineLLaMA<Gemm1, GemmSplitK2>(split_k1, split_k2, mlpParams, stream1, stream2, execTime, matmul1Time, matmul2Time, matmul3Time, iters);
-  } else {
-    result = runBaselineLLaMA<GemmSplitK1, GemmSplitK2>(split_k1, split_k2, mlpParams, stream1, stream2, execTime, matmul1Time, matmul2Time, matmul3Time, iters);
   }
 
   return result;
@@ -976,31 +873,7 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   static constexpr auto SharedClearOption = cutlass::gemm::SharedMemoryClearOption::kNone;
   using PermuteDLayout = cutlass::layout::NoPermute;
 
-  using GemmKernel = typename cutlass::gemm::kernel::DefaultCuSyncGemm<ElementInputA, 
-                                      LayoutInputA,
-                                      kAlignmentA, 
-                                      ElementInputB, 
-                                      LayoutInputB,
-                                      kAlignmentB,
-                                      ElementOutput, 
-                                      LayoutOutput,
-                                      ElementAccumulator, 
-                                      MMAOp,
-                                      SmArch, 
-                                      ShapeThreadBlock1,
-                                      ShapeWarp1, 
-                                      ShapeMMAOp,
-                                      EpilogueOp1, 
-                                      CuSyncGeMMSwizzle,
-                                      NumStages1, 
-                                      false, 
-                                      Operator_, 
-                                      SharedClearOption,
-                                      false,
-                                      false,
-                                      false,
-                                      PermuteDLayout
-                                      >::GemmKernel;
+  using GemmKernel = typename cutlass::gemm::kernel::DefaultCuSyncGemm<ElementInputA, LayoutInputA, kAlignmentA, ElementInputB, LayoutInputB, kAlignmentB, ElementOutput, LayoutOutput, ElementAccumulator, MMAOp, SmArch, ShapeThreadBlock1, ShapeWarp1, ShapeMMAOp, EpilogueOp1, CuSyncGeMMSwizzle, NumStages1, false, Operator_, SharedClearOption, false, false, false, PermuteDLayout >::GemmKernel;
 
   CuSyncGeMMSwizzle cuSyncGeMMSwizzle;
 
@@ -1015,24 +888,6 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
     args2.split_k_slices);
   printf("grid_shape1.m=%d, grid_shape1.n=%d,grid_shape1.k=%d,grid_shape2.m=%d, grid_shape2.n=%d,grid_shape2.k=%d\n", grid_shape1.m(),grid_shape1.n(),grid_shape1.k(),grid_shape2.m(),grid_shape2.n(),grid_shape2.k());
 
-// typename GemmKernel::Params<ProdCuStage> params_{
-  //   prod,
-  //   args1.problem_size,
-  //   grid_shape,
-  //   args1.ref_A.non_const_ref(),
-  //   args1.ref_B.non_const_ref(),
-  //   args1.ref_C.non_const_ref(),
-  //   args1.ref_D,
-  //   args1.epilogue,
-  //   reinterpret_cast<int *>(workspace1.get()),
-  //   args1.gather_A_indices,
-  //   args1.gather_B_indices,
-  //   args1.scatter_D_indices,
-  //   0,
-  //   56,
-  //   0
-  // };
-
   typename GemmKernel::Params<ProdCuStage> prod_params{prod, args1.problem_size, grid_shape1, args1.ref_A.non_const_ref(), args1.ref_B.non_const_ref(), args1.ref_C.non_const_ref(), args1.ref_D, args1.epilogue, reinterpret_cast<int *>(workspace1.get()), args1.gather_A_indices, args1.gather_B_indices, args1.scatter_D_indices, 0, grid_shape1.n(), 2, 0};
 
   typename GemmKernel::Params<ConsCuStage> cons_params{cons, args2.problem_size, grid_shape2, args2.ref_A.non_const_ref(), args2.ref_B.non_const_ref(), args2.ref_C.non_const_ref(), args2.ref_D, {mlpParams.alpha, mlpParams.beta}, reinterpret_cast<int *>(workspace2.get()), args2.gather_A_indices, args2.gather_B_indices, args2.scatter_D_indices, grid_shape1.n(), grid_shape1.n()+grid_shape2.n(), 2, 1};
@@ -1044,20 +899,15 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   // GemmKernel::Params<ProdCuStage> params_array = prod_params;
   // cutlass::gemm::kernel::BaseParams* params_array[] = { &prod_params};
 
-  // for (int i = 0; i < 2; i++) {
-  //   printf("params_array[%d]->block_range_down = %d\n", i, params_array[i]->block_range_down);
-  //   printf("params_array[%d]->block_range_up = %d\n", i, params_array[i]->block_range_up);
-  // }
-
   // dim3 grid = cuSyncGeMMSwizzle.get_grid_shape(params_.grid_tiled_shape);
   // dim3 block(GemmKernel::kThreadCount, 1, 1);
   dim3 grid = {grid_shape1.n()+grid_shape2.n(), 1, 1};
   // dim3 block = {128, 1, 1};
   dim3 block(GemmKernel::kThreadCount, 1, 1);
-  printf("GemmKernel::kThreadCount=%d\n",GemmKernel::kThreadCount);  // 验证了一下确实是256
-
-  int smem_size = 99 << 10;  // ????
+  // int smem_size = 99 << 10;  // ????
   // int smem_size = 8 << 10;  // ????
+  int smem_size = int(sizeof(typename GemmKernel::SharedStorage));
+  printf("GemmKernel::kThreadCount=%d, smem_size=%d\n",GemmKernel::kThreadCount, smem_size);
 
   cudaFuncSetAttribute(AllKernel<GemmKernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
 
@@ -1077,7 +927,7 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   float time_ms = 0;
   CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, end));
   execTime += time_ms*1000.0f;
-
+  printf("MyKernel cuSync avg run time: %f\n", execTime/iters);
   return cudaSuccess;
 }
 
@@ -1333,15 +1183,17 @@ int run(int argc, char* argv[]) {
   mlpParams.initRefs();
   
   cudaError_t result;
-  int epochs = 200;
+  int epochs = 2000;
   int warmup = 1;
 
   if (doChecking) {
     //Run our reference MLP
     result = referenceMLP(mlpParams);
     if (result != cudaSuccess) {
+      printf("Reference MLP failed\n");
       return 1;
     }
+    printf("Reference MLP passed\n");
   }
 
   //Run baseline MLP
@@ -1374,33 +1226,9 @@ int run(int argc, char* argv[]) {
     CUDA_CHECK(result);
     printf("END-BASELINE:\n");
     printf("Average time %lf microseconds\n", baselineTime/(float)epochs);
-  } else if (mlpParams.isLLaMa()) {
-    result = runBaselineLLaMA(split_k1, split_k2, mlpParams, producer_stream, 
-                              producer_stream2, baselineTime, matmul1Time, softmaxTime, matmul2Time, 1);
-
-    CUDA_CHECK(cudaDeviceSynchronize());
-
-    if (doChecking) {
-      result = checkMLPResults(mlpParams);
-      if (result != cudaSuccess) {
-        return 1;
-      }
-    }
-
-    result = runBaselineLLaMA(split_k1, split_k2, mlpParams, producer_stream, 
-                              producer_stream2, baselineTime, matmul1Time, softmaxTime, matmul2Time, warmup);
-
-    CUDA_CHECK(cudaDeviceSynchronize());
-    printf("START-BASELINE:\n");
-    result = runBaselineLLaMA(split_k1, split_k2, mlpParams, producer_stream, 
-                              producer_stream2, baselineTime, matmul1Time, softmaxTime, matmul2Time, epochs);
-    CUDA_CHECK(result);
-    printf("END-BASELINE:\n");
-    printf("Average time %lf microseconds\n", baselineTime/(float)epochs);
-  }
+  } 
   }
 
-  
   if (doChecking) {
     mlpParams.initOuts();
   }
@@ -1473,36 +1301,6 @@ int run(int argc, char* argv[]) {
 
     printf("Average time %lf microseconds\n", overlapTime/(float)epochs);
   }
-  //  else if (mlpParams.isLLaMa()) {
-  //   ProdCuStage prod(CuSyncGeMMSwizzle().get_grid_shape(gridDim1), {1,1,1}, NoSync(), sync);
-  //   ConsCuStage cons(CuSyncGeMMSwizzle().get_grid_shape(gridDim2), {1,1,1}, sync, NoSync());
-    
-  //   double overlapTime = 0;
-
-  //   CuSync::setProducerConsumerPair(prod, cons);
-
-  //   result = runCuSyncLLaMA(split_k1, split_k2, mlpParams, prod, cons, streams, overlapTime, 1);
-  //   printf("1110 line\n");
-  //   CUDA_CHECK(cudaDeviceSynchronize());
-  //   if (doChecking) {
-  //     result = checkMLPResults(mlpParams);
-  //     if (result != cudaSuccess) {
-  //       return 1;
-  //     }
-  //   }
-
-  //   result = runCuSyncLLaMA(split_k1, split_k2, mlpParams, prod, cons, streams, overlapTime, warmup);
-    
-  //   CUDA_CHECK(cudaDeviceSynchronize());
-  //   printf("START-OVERLAPPED:\n");
-    
-  //   result = runCuSyncLLaMA(split_k1, split_k2, mlpParams, prod, cons, streams, overlapTime, epochs);
-    
-  //   CUDA_CHECK(result);
-  //   printf("END-OVERLAPPED:\n");
-    
-  //   printf("Average time %lf microseconds\n", overlapTime/(float)epochs);
-  // }
   }
 
   return 0;
