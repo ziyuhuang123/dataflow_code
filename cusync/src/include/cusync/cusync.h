@@ -135,6 +135,8 @@ private:
       hTileOrder[id] = invalidBlock;
     }
 
+
+
     for (uint32_t z = 0; z < grid_.z; z++) {
     for (uint32_t y = 0; y < grid_.y; y++) {
     for (uint32_t x = 0; x < grid_.x; x++) {
@@ -281,7 +283,8 @@ public:
    * Returns the next tile process and set the waitkernel's semaphore if valid
    */  
   CUSYNC_DEVICE
-  dim3 tile(dim3* shared_storage);
+  dim3 tile(dim3* shared_storage, dim3 exec_array);
+  // dim3 tile(dim3* shared_storage);  // 这是原先的
 };
 
 struct CuSync {

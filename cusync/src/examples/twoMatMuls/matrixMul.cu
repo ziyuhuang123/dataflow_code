@@ -40,11 +40,11 @@ using ProdCuStage = CuStage<IdentityOrder, NoSync, Sync>;
 using ConsCuStage = CuStage<IdentityOrder, Sync, NoSync>;
 
 template <typename CuStageTy>
-__global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A,
-                              float *B, int wA, int wB) {
+__global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A, float *B, int wA, int wB, dim3* exec_array) {
   __shared__ int tileSh[3];
+  dim3 local_tile = exec_array[blockIdx.x + blockIdx.y * gridDim.x];
   // Get tile to compute by this thread block
-  dim3 tile = custage.tile((dim3*)&tileSh[0]);
+  dim3 tile = custage.tile((dim3*)&tileSh[0], local_tile);
 
   if(threadIdx.x==0&&threadIdx.y==0){
     printf("Tile: (%d, %d, %d), real_blx=%d, real_bly=%d\n", tile.x, tile.y, tile.z, blockIdx.x, blockIdx.y);
@@ -211,10 +211,23 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
   // Create and start timer
   printf("Computing result using CUDA Kernel...\n");
 
+  dim3 exec_seq[16] = {
+      dim3(0, 0, 0), dim3(1, 0, 0), dim3(2, 0, 0), dim3(3, 0, 0),
+      dim3(0, 1, 0), dim3(1, 1, 0), dim3(2, 1, 0), dim3(3, 1, 0),
+      dim3(0, 2, 0), dim3(1, 2, 0), dim3(2, 2, 0), dim3(3, 2, 0),
+      dim3(0, 3, 0), dim3(1, 3, 0), dim3(2, 3, 0), dim3(3, 3, 0)
+  };
+  dim3* d_exec_seq;
+  cudaMalloc(&d_exec_seq, sizeof(dim3) * 16);
+
+  // 将数据从CPU复制到GPU
+  cudaMemcpy(d_exec_seq, exec_seq, sizeof(dim3) * 16, cudaMemcpyHostToDevice);
+
+
   assert (block_size == 32);
   // Invoke producer kernel (C = A * B)
   MatrixMulCUDA<ProdCuStage>
-        <<<grid, threads, 0, prod_stream>>>(prod, d_C, d_A, d_B, dimsA.x, dimsB.x);
+        <<<grid, threads, 0, prod_stream>>>(prod, d_C, d_A, d_B, dimsA.x, dimsB.x, d_exec_seq);
 
   //Invoke wait kernel
   prod.invokeWaitKernel(cons_stream);

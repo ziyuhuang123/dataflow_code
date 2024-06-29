@@ -133,11 +133,6 @@ struct Tuple {
     int second;
 };
 
-// 定义包含字符串和元组的结构体
-struct ExecEntry {
-    const char* name;
-    Tuple tuple;
-};
 
 template<typename TileOrder, uint GridN, uint TileM, uint TileN, uint stride>
 struct StridedSync {
@@ -350,15 +345,15 @@ struct MLPParameters {
       ElementOutput values[5] = {ElementOutput(1), ElementOutput(0.5),
                                  ElementOutput(0.1), ElementOutput(0.06),
                                  ElementOutput(0.04)};
-      // memset_random(x.host_data(), 5, values, x.size());
-      // memset_random(w1.host_data(), 5, values, w1.size());
-      // memset_random(w2.host_data(), 5, values, w1.size());
+      memset_random(x.host_data(), 5, values, x.size());
+      memset_random(w1.host_data(), 5, values, w1.size());
+      memset_random(w2.host_data(), 5, values, w1.size());
       // memset_random(x.host_data(), 2, values, x.size());
       // cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(1));
 
-      cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(0.1));
-      cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.1));
-      cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.1));
+      // cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(0.1));
+      // cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.1));
+      // cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.1));
 
       if (model == "llama") {
         memset_random2(vw1.host_data(), ElementOutput(0.01), ElementOutput(0.2), vw1.size());
@@ -759,7 +754,7 @@ void run_cublasGPT3(
 
 template <typename Operator>
 __device__
-void GEMMdeviceFunction_cons(typename Operator::Params<ConsCuStage> params) {
+void GEMMdeviceFunction_cons(typename Operator::Params<ConsCuStage> params, dim3 local_exec) {
   // Dynamic shared memory base pointer
   extern __shared__ int SharedStorageBase[];
 
@@ -768,13 +763,13 @@ void GEMMdeviceFunction_cons(typename Operator::Params<ConsCuStage> params) {
       reinterpret_cast<typename Operator::SharedStorage *>(SharedStorageBase);
 
   Operator op;
-  op(params, *shared_storage);
+  op(params, *shared_storage, local_exec);
 }
 
 
 template <typename Operator>
 __device__
-void GEMMdeviceFunction_prod(typename Operator::Params<ProdCuStage> params) {
+void GEMMdeviceFunction_prod(typename Operator::Params<ProdCuStage> params, dim3 local_exec) {
   // Dynamic shared memory base pointer
   extern __shared__ int SharedStorageBase[];
 
@@ -783,41 +778,34 @@ void GEMMdeviceFunction_prod(typename Operator::Params<ProdCuStage> params) {
       reinterpret_cast<typename Operator::SharedStorage *>(SharedStorageBase);
 
   Operator op;
-  op(params, *shared_storage);
-}
-
-__device__ int device_strcmp(const char *str1, const char *str2) {
-    while (*str1 && (*str1 == *str2)) {
-        ++str1;
-        ++str2;
-    }
-    return *(unsigned char*)str1 - *(unsigned char*)str2;
+  op(params, *shared_storage, local_exec);
 }
 
 /// Generic CUTLASS kernel template.
 template <typename Operator>
 __global__
-void AllKernel(typename Operator::Params<ConsCuStage> cons_params, typename Operator::Params<ProdCuStage> prod_params, int num_params, ExecEntry* exec_array, int size) {
+void AllKernel(typename Operator::Params<ConsCuStage> cons_params, typename Operator::Params<ProdCuStage> prod_params, dim3* exec_array) {
 // void AllKernel(cutlass::gemm::kernel::BaseParams **params_array, int num_params) { // 以后可以这样改来写的更漂亮。
 // 出去修改param。预设置空的blx和bly，然后在这里用tuple.first和tuple.second来设置。
-  // ExecEntry this_block_exec = exec_array[blockIdx.x];
-  // if (device_strcmp(this_block_exec.name, "cons") == 0) {
-  //     // GEMMdeviceFunction_cons<Operator>(cons_params, this_block_exec.tuple.first, this_block_exec.tuple.second);
-  // } else if (device_strcmp(this_block_exec.name, "prod") == 0) {
-  //     // GEMMdeviceFunction_prod<Operator>(prod_params, this_block_exec.tuple.first, this_block_exec.tuple.second);
-  // } else {
-  //     printf("Error: out of block range\n");
-  // }
 
-  if(blockIdx.x>=prod_params.block_range_down && blockIdx.x<prod_params.block_range_up){
-    GEMMdeviceFunction_prod<Operator>(prod_params);
+  dim3 this_block_exec = exec_array[blockIdx.x]; // 注意我们只发射一维网格！但是问题可以是二维的。
+  if (this_block_exec.z==1) {
+      GEMMdeviceFunction_cons<Operator>(cons_params, this_block_exec);
+  } else if (this_block_exec.z==0) {
+      GEMMdeviceFunction_prod<Operator>(prod_params, this_block_exec);
+  } else {
+      printf("Error: out of block range\n");
   }
-  else if(blockIdx.x>=cons_params.block_range_down && blockIdx.x<cons_params.block_range_up){
-    GEMMdeviceFunction_cons<Operator>(cons_params);
-  }
-  else{
-    printf("Error out of block range\n");
-  }
+
+  // if(blockIdx.x>=prod_params.block_range_down && blockIdx.x<prod_params.block_range_up){
+  //   GEMMdeviceFunction_prod<Operator>(prod_params);
+  // }
+  // else if(blockIdx.x>=cons_params.block_range_down && blockIdx.x<cons_params.block_range_up){
+  //   GEMMdeviceFunction_cons<Operator>(cons_params);
+  // }
+  // else{
+  //   printf("Error out of block range\n");
+  // }
 }
 
 /*CuSync GPT-3 MLP*/
@@ -936,19 +924,25 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
 
   cudaFuncSetAttribute(AllKernel<GemmKernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
 
-  ExecEntry exec_array[] = {
-      {"cons", {2, 3}},
-      {"prod", {3, 4}},
-      // 添加更多元素...
-  };
 
-  // 计算数组大小
-  int size = sizeof(exec_array) / sizeof(ExecEntry);
+  dim3 exec_seq[16] = {
+      dim3(0, 0, 0), dim3(1, 0, 0), dim3(2, 0, 0), dim3(3, 0, 0),
+      dim3(0, 1, 0), dim3(1, 1, 0), dim3(2, 1, 0), dim3(3, 1, 0),
+      dim3(0, 2, 0), dim3(1, 2, 0), dim3(2, 2, 0), dim3(3, 2, 0),
+      dim3(0, 3, 0), dim3(1, 3, 0), dim3(2, 3, 0), dim3(3, 3, 0)
+  }; // origin policy，直接算完一整行。
+  // dim3 exec_seq[16] = {
+  //     dim3(0, 0, 0), dim3(1, 0, 0), dim3(0, 1, 0), dim3(1, 1, 0),
+  //     dim3(0, 2, 0), dim3(1, 2, 0), dim3(0, 3, 0), dim3(1, 3, 0),
+  //     dim3(2, 0, 0), dim3(3, 0, 0), dim3(2, 1, 0), dim3(3, 1, 0),
+  //     dim3(2, 2, 0), dim3(3, 2, 0), dim3(2, 3, 0), dim3(3, 3, 0)
+  // };  // 基础Z字形
+  dim3* d_exec_seq;
+  cudaMalloc(&d_exec_seq, sizeof(dim3) * 16);
 
-  // 分配和复制到设备内存
-  ExecEntry* d_exec_array;
-  cudaMalloc(&d_exec_array, size * sizeof(ExecEntry));
-  cudaMemcpy(d_exec_array, exec_array, size * sizeof(ExecEntry), cudaMemcpyHostToDevice);
+  // 将数据从CPU复制到GPU
+  cudaMemcpy(d_exec_seq, exec_seq, sizeof(dim3) * 16, cudaMemcpyHostToDevice);
+
 
   execTime = 0;
   cudaEvent_t start, end;
@@ -957,7 +951,7 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   CUDA_CHECK(cudaEventRecord(start, 0));
 
   for (int r = 0; r < iters; r++) {
-    AllKernel<GemmKernel><<<grid, block, smem_size>>>(cons_params, prod_params, 2, d_exec_array, size); 
+    AllKernel<GemmKernel><<<grid, block, smem_size>>>(cons_params, prod_params, d_exec_seq); 
   }
 
   CUDA_CHECK(cudaEventRecord(end, 0));

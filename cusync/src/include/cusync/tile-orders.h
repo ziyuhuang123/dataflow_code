@@ -66,7 +66,8 @@ struct TransposeXYOrder : public GenericTileOrder<TransposeXYOrder> {
 struct IdentityOrder : public GenericTileOrder<IdentityOrder> {
   CUSYNC_DEVICE_HOST
   uint32_t blockIndex(const dim3& grid, const dim3& block) {
-    return block.x + block.y * grid.x + block.z * grid.x * grid.y;
+    return block.x + block.y * grid.x + block.z * grid.x * grid.y;  // 从外部输入的grid和block长这样：TileOrder().blockIndex(grid_, {x, y, z});  其中{x, y, z}是对grid_的遍历。也就是说，这里相当于blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    // 如果block是一维的，那么这里就等于block.x; （因为blockIdx.y等于0，blockIdx.z等于0）
   }
 
   CUSYNC_DEVICE
