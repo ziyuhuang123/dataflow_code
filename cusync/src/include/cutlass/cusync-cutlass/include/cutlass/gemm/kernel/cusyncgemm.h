@@ -222,12 +222,17 @@ struct CuSyncGemm {
   //TODO: Had to make Params non-const, does that have any perf issue?
   template <typename CustageType>
   CUTLASS_DEVICE
+  // void operator()(Params<CustageType> &params, SharedStorage &shared_storage, int blx, int bly) {
   void operator()(Params<CustageType> &params, SharedStorage &shared_storage) {
     CustageType& stage = params.custage;
     dim3 new_block_idx = stage.tile(&shared_storage.tile_idx);
     
     uint block_idx_y = new_block_idx.y;
     uint block_idx_x = new_block_idx.x;
+    
+    if(threadIdx.x==0 && threadIdx.y==0){
+      printf("block_idx_x: %d, block_idx_y: %d, real_blx=%d, real_bly=%d\n", block_idx_x, block_idx_y, blockIdx.x, blockIdx.y);
+    }
     
     const uint block_idx_z = new_block_idx.z;
     ThreadblockSwizzle threadblock_swizzle;

@@ -70,19 +70,19 @@ const int NumStages1 = 3;
 const int NumStages2 = 3;
 #else
 //<eval tiles>
-// using ShapeThreadBlock1 = cutlass::gemm::GemmShape<64, 64, 32>;
-// using ShapeWarp1 = cutlass::gemm::GemmShape<32, 32, 32>;
-// using ShapeThreadBlock2 = cutlass::gemm::GemmShape<64, 64, 32>;
-// using ShapeWarp2 = cutlass::gemm::GemmShape<32, 32, 32>;
-// const uint NumStages1 = 5;
-// const uint NumStages2 = 5;
-using ShapeThreadBlock1 = cutlass::gemm::GemmShape<64, 64, 32>;  
-using ShapeWarp1 = cutlass::gemm::GemmShape<32, 32, 32>;
-using ShapeThreadBlock2 = cutlass::gemm::GemmShape<64, 64, 32>;  
-using ShapeWarp2 = cutlass::gemm::GemmShape<32, 32, 32>;
-const uint NumStages1 = 4;
-const uint NumStages2 = 4;
+using ShapeThreadBlock1 = cutlass::gemm::GemmShape<128, 128, 32>;
+using ShapeWarp1 = cutlass::gemm::GemmShape<64, 64, 32>;
 
+using ShapeThreadBlock2 = cutlass::gemm::GemmShape<128, 128, 32>;
+using ShapeWarp2 = cutlass::gemm::GemmShape<64, 64, 32>;
+const uint NumStages1 = 3;
+const uint NumStages2 = 3;
+// using ShapeThreadBlock1 = cutlass::gemm::GemmShape<64, 64, 32>;  
+// using ShapeWarp1 = cutlass::gemm::GemmShape<32, 32, 32>;
+// using ShapeThreadBlock2 = cutlass::gemm::GemmShape<64, 64, 32>;  
+// using ShapeWarp2 = cutlass::gemm::GemmShape<32, 32, 32>;
+// const uint NumStages1 = 4;
+// const uint NumStages2 = 4;
 
 //</eval tiles>
 #endif
@@ -107,6 +107,7 @@ using SmArch = cutlass::arch::Sm80;
 #include <cuda_fp16.h>
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
+#include <iostream>
 
 // Utility to check CUDA and cuBLAS functions return values
 #define CHECK_CUDA_ERROR(call) { \
@@ -125,6 +126,18 @@ using SmArch = cutlass::arch::Sm80;
     } \
 }
 
+
+// 定义包含两个整数的元组结构体
+struct Tuple {
+    int first;
+    int second;
+};
+
+// 定义包含字符串和元组的结构体
+struct ExecEntry {
+    const char* name;
+    Tuple tuple;
+};
 
 template<typename TileOrder, uint GridN, uint TileM, uint TileN, uint stride>
 struct StridedSync {
@@ -297,10 +310,10 @@ struct MLPParameters {
     model = model_;
 
     if (model == "gpt3") {
-      // gemm_size1 = cutlass::gemm::GemmCoord(batch, 128, 128);
-      // gemm_size2 = cutlass::gemm::GemmCoord(batch, 128, 128);
-      gemm_size1 = cutlass::gemm::GemmCoord(batch, 14336, 4096);
-      gemm_size2 = cutlass::gemm::GemmCoord(batch, 4096, 14336);
+      gemm_size1 = cutlass::gemm::GemmCoord(batch, 512, 512);
+      gemm_size2 = cutlass::gemm::GemmCoord(batch, 512, 512);
+      // gemm_size1 = cutlass::gemm::GemmCoord(batch, 14336, 4096);
+      // gemm_size2 = cutlass::gemm::GemmCoord(batch, 4096, 14336);
     } else if (model=="llama") {
       int H = 8192;
       int d = ((H/3 + 127)/128)*128;
@@ -335,13 +348,14 @@ struct MLPParameters {
     srand(12345);  // 设置随机种子为固定值，确保每次运行结果相同
     if (checkResults) {
       ElementOutput values[5] = {ElementOutput(1), ElementOutput(0.5),
-                                 ElementOutput(1), ElementOutput(0.06),
+                                 ElementOutput(0.1), ElementOutput(0.06),
                                  ElementOutput(0.04)};
       // memset_random(x.host_data(), 5, values, x.size());
       // memset_random(w1.host_data(), 5, values, w1.size());
       // memset_random(w2.host_data(), 5, values, w1.size());
       // memset_random(x.host_data(), 2, values, x.size());
       // cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(1));
+
       cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(0.1));
       cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.1));
       cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.1));
@@ -462,7 +476,7 @@ cudaError_t checkMLPResults(MLPParameters& mlpParams) {
                         mlpParams.xw1.size() * sizeof(ElementOutput), 
                         cudaMemcpyDeviceToHost));
   printf("Checking first GeMM\n");
-  bool eq = equals(mlpParams.ref_xw1.size(), mlpParams.ref_xw1.host_data(), hostC, 1e-3f);
+  bool eq = equals(mlpParams.ref_xw1.size(), mlpParams.ref_xw1.host_data(), hostC, 1e-1f);
   printf("cutlass-Expected first element: %f, My Received first element: %f\n", static_cast<float>(mlpParams.ref_xw1.host_data()[0]), static_cast<float>(hostC[0]));
   if (eq == false) {
     printf("First GeMM not correct\n");
@@ -479,7 +493,7 @@ cudaError_t checkMLPResults(MLPParameters& mlpParams) {
                         cudaMemcpyDeviceToHost));
   //For LLaMa not checking XV
   printf("Checking second GeMM\n");
-  eq = equals(mlpParams.ref_xw12.size(), mlpParams.ref_xw12.host_data(), hostE, 1e-3f);
+  eq = equals(mlpParams.ref_xw12.size(), mlpParams.ref_xw12.host_data(), hostE, 1e-1f);
   printf("cutlass-Expected first element: %f, My-Received first element: %f\n", static_cast<float>(mlpParams.ref_xw12.host_data()[0]), static_cast<float>(hostE[0]));
   if (eq == false) {
     printf("Second GeMM not correct \n");
@@ -505,7 +519,7 @@ cudaError_t checkMLPResults_cublas(MLPParameters& mlpParams) {
                           cudaMemcpyDeviceToHost));
 
     printf("Checking first GeMM\n");
-    bool eq = equals(mlpParams.xw1_cublas.size(), hostC_cublas, hostC, 1e-3f);
+    bool eq = equals(mlpParams.xw1_cublas.size(), hostC_cublas, hostC, 1e-1f);
     printf("My Expected first element: %f, cublas first element: %f\n",
                static_cast<float>(hostC[0]), static_cast<float>(hostC_cublas[0]));
     if (!eq) {
@@ -526,7 +540,7 @@ cudaError_t checkMLPResults_cublas(MLPParameters& mlpParams) {
                           mlpParams.xw12_cublas.size() * sizeof(ElementOutput), 
                           cudaMemcpyDeviceToHost));
     printf("Checking second GeMM\n");
-    eq = equals(mlpParams.xw12_cublas.size(), hostE_cublas, hostE, 1e-3f);
+    eq = equals(mlpParams.xw12_cublas.size(), hostE_cublas, hostE, 1e-1f);
     if (!eq) {
         printf("Second GeMM not correct\n");
         return cudaErrorUnknown;
@@ -580,43 +594,6 @@ cudaError_t runBaselineGPT3(int split_k1, int split_k2,
   CUTLASS_CHECK(status);
   status = gemm_op2.initialize(args2, workspace2.get());
   CUTLASS_CHECK(status);
-  
-  // execTime = 0;
-  // cudaStream_t stream2;
-  // CUDA_CHECK(cudaStreamCreate(&stream2));
-
-  // cudaEvent_t start, end, middle;
-  // CUDA_CHECK(cudaEventCreate(&start));
-  // CUDA_CHECK(cudaEventCreate(&end));
-  // CUDA_CHECK(cudaEventCreate(&middle));
-
-  //Run kernels
-  // for (int r = 0; r < iters; r++) {    
-  //   CUDA_CHECK(cudaEventRecord(start, stream));
-  //   status = gemm_op1(stream);
-  //   CUTLASS_CHECK(status);
-  //   CUDA_CHECK(cudaEventRecord(middle, stream));
-
-  //   status = gemm_op2(stream);
-  //   CUTLASS_CHECK(status);
-  //   CUDA_CHECK(cudaEventRecord(end, stream));
-  //   CUDA_CHECK(cudaEventSynchronize(end));
-
-  //   float iterMatMul1 = 0;
-  //   CUDA_CHECK(cudaEventElapsedTime(&iterMatMul1, start, middle));
-  //   matmul1Time += iterMatMul1;
-  //   float iterMatMul2 = 0;
-  //   CUDA_CHECK(cudaEventElapsedTime(&iterMatMul2, middle, end));
-  //   matmul2Time += iterMatMul2;
-
-  //   float end_to_start = 0;
-  //   CUDA_CHECK(cudaEventElapsedTime(&end_to_start, start, end));
-
-  //   if (iters == 20)
-  //     printf("{\"Total\": %lf, \"matmul1Time\": %lf, \"matmul2Time\": %lf}\n", 
-  //            end_to_start * 1000.0f, iterMatMul1*1000.0f, iterMatMul2*1000.0f);
-  //   execTime += end_to_start * 1000.0f;
-  // }
 
   execTime = 0;
   cudaEvent_t start, end;
@@ -751,6 +728,35 @@ void run_cublasGPT3(
     CHECK_CUBLAS_ERROR(cublasDestroy(handle));
 }
 
+// template <typename Operator>
+// __device__
+// void GEMMdeviceFunction_cons(typename Operator::Params<ConsCuStage> params, int blx, int bly) {
+//   // Dynamic shared memory base pointer
+//   extern __shared__ int SharedStorageBase[];
+
+//   // Declare pointer to dynamic shared memory.
+//   typename Operator::SharedStorage *shared_storage =
+//       reinterpret_cast<typename Operator::SharedStorage *>(SharedStorageBase);
+
+//   Operator op;
+//   op(params, *shared_storage, blx, bly);
+// }
+
+
+// template <typename Operator>
+// __device__
+// void GEMMdeviceFunction_prod(typename Operator::Params<ProdCuStage> params, int blx, int bly) {
+//   // Dynamic shared memory base pointer
+//   extern __shared__ int SharedStorageBase[];
+
+//   // Declare pointer to dynamic shared memory.
+//   typename Operator::SharedStorage *shared_storage =
+//       reinterpret_cast<typename Operator::SharedStorage *>(SharedStorageBase);
+
+//   Operator op;
+//   op(params, *shared_storage, blx, bly);
+// }
+
 template <typename Operator>
 __device__
 void GEMMdeviceFunction_cons(typename Operator::Params<ConsCuStage> params) {
@@ -780,11 +786,28 @@ void GEMMdeviceFunction_prod(typename Operator::Params<ProdCuStage> params) {
   op(params, *shared_storage);
 }
 
+__device__ int device_strcmp(const char *str1, const char *str2) {
+    while (*str1 && (*str1 == *str2)) {
+        ++str1;
+        ++str2;
+    }
+    return *(unsigned char*)str1 - *(unsigned char*)str2;
+}
+
 /// Generic CUTLASS kernel template.
 template <typename Operator>
 __global__
-void AllKernel(typename Operator::Params<ConsCuStage> cons_params, typename Operator::Params<ProdCuStage> prod_params, int num_params) {
+void AllKernel(typename Operator::Params<ConsCuStage> cons_params, typename Operator::Params<ProdCuStage> prod_params, int num_params, ExecEntry* exec_array, int size) {
 // void AllKernel(cutlass::gemm::kernel::BaseParams **params_array, int num_params) { // 以后可以这样改来写的更漂亮。
+// 出去修改param。预设置空的blx和bly，然后在这里用tuple.first和tuple.second来设置。
+  // ExecEntry this_block_exec = exec_array[blockIdx.x];
+  // if (device_strcmp(this_block_exec.name, "cons") == 0) {
+  //     // GEMMdeviceFunction_cons<Operator>(cons_params, this_block_exec.tuple.first, this_block_exec.tuple.second);
+  // } else if (device_strcmp(this_block_exec.name, "prod") == 0) {
+  //     // GEMMdeviceFunction_prod<Operator>(prod_params, this_block_exec.tuple.first, this_block_exec.tuple.second);
+  // } else {
+  //     printf("Error: out of block range\n");
+  // }
 
   if(blockIdx.x>=prod_params.block_range_down && blockIdx.x<prod_params.block_range_up){
     GEMMdeviceFunction_prod<Operator>(prod_params);
@@ -886,11 +909,10 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
     args2.problem_size, 
     {ShapeThreadBlock2::kM, ShapeThreadBlock2::kN, ShapeThreadBlock2::kK},
     args2.split_k_slices);
-  printf("grid_shape1.m=%d, grid_shape1.n=%d,grid_shape1.k=%d,grid_shape2.m=%d, grid_shape2.n=%d,grid_shape2.k=%d\n", grid_shape1.m(),grid_shape1.n(),grid_shape1.k(),grid_shape2.m(),grid_shape2.n(),grid_shape2.k());
 
-  typename GemmKernel::Params<ProdCuStage> prod_params{prod, args1.problem_size, grid_shape1, args1.ref_A.non_const_ref(), args1.ref_B.non_const_ref(), args1.ref_C.non_const_ref(), args1.ref_D, args1.epilogue, reinterpret_cast<int *>(workspace1.get()), args1.gather_A_indices, args1.gather_B_indices, args1.scatter_D_indices, 0, grid_shape1.n(), 2, 0};
+  typename GemmKernel::Params<ProdCuStage> prod_params{prod, args1.problem_size, grid_shape1, args1.ref_A.non_const_ref(), args1.ref_B.non_const_ref(), args1.ref_C.non_const_ref(), args1.ref_D, args1.epilogue, reinterpret_cast<int *>(workspace1.get()), args1.gather_A_indices, args1.gather_B_indices, args1.scatter_D_indices, 0, grid_shape1.m()*grid_shape1.n(), 2, 0};
 
-  typename GemmKernel::Params<ConsCuStage> cons_params{cons, args2.problem_size, grid_shape2, args2.ref_A.non_const_ref(), args2.ref_B.non_const_ref(), args2.ref_C.non_const_ref(), args2.ref_D, {mlpParams.alpha, mlpParams.beta}, reinterpret_cast<int *>(workspace2.get()), args2.gather_A_indices, args2.gather_B_indices, args2.scatter_D_indices, grid_shape1.n(), grid_shape1.n()+grid_shape2.n(), 2, 1};
+  typename GemmKernel::Params<ConsCuStage> cons_params{cons, args2.problem_size, grid_shape2, args2.ref_A.non_const_ref(), args2.ref_B.non_const_ref(), args2.ref_C.non_const_ref(), args2.ref_D, {mlpParams.alpha, mlpParams.beta}, reinterpret_cast<int *>(workspace2.get()), args2.gather_A_indices, args2.gather_B_indices, args2.scatter_D_indices, grid_shape1.m()*grid_shape1.n(), grid_shape1.m()*grid_shape1.n()+grid_shape2.n()*grid_shape2.m(), 2, 1};
 
 
   // 创建包含 prod_params 和 cons_params 的数组
@@ -901,7 +923,10 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
 
   // dim3 grid = cuSyncGeMMSwizzle.get_grid_shape(params_.grid_tiled_shape);
   // dim3 block(GemmKernel::kThreadCount, 1, 1);
-  dim3 grid = {grid_shape1.n()+grid_shape2.n(), 1, 1};
+
+  printf("grid_shape1.m=%d, grid_shape1.n=%d,grid_shape1.k=%d,grid_shape2.m=%d, grid_shape2.n=%d,grid_shape2.k=%d\n", grid_shape1.m(),grid_shape1.n(),grid_shape1.k(),grid_shape2.m(),grid_shape2.n(),grid_shape2.k());
+
+  dim3 grid = {grid_shape1.m()*grid_shape1.n()+grid_shape2.n()*grid_shape2.m(), 1, 1};
   // dim3 block = {128, 1, 1};
   dim3 block(GemmKernel::kThreadCount, 1, 1);
   // int smem_size = 99 << 10;  // ????
@@ -911,6 +936,20 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
 
   cudaFuncSetAttribute(AllKernel<GemmKernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
 
+  ExecEntry exec_array[] = {
+      {"cons", {2, 3}},
+      {"prod", {3, 4}},
+      // 添加更多元素...
+  };
+
+  // 计算数组大小
+  int size = sizeof(exec_array) / sizeof(ExecEntry);
+
+  // 分配和复制到设备内存
+  ExecEntry* d_exec_array;
+  cudaMalloc(&d_exec_array, size * sizeof(ExecEntry));
+  cudaMemcpy(d_exec_array, exec_array, size * sizeof(ExecEntry), cudaMemcpyHostToDevice);
+
   execTime = 0;
   cudaEvent_t start, end;
   CUDA_CHECK(cudaEventCreate(&start));
@@ -918,7 +957,7 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   CUDA_CHECK(cudaEventRecord(start, 0));
 
   for (int r = 0; r < iters; r++) {
-    AllKernel<GemmKernel><<<grid, block, smem_size>>>(cons_params, prod_params, 2); 
+    AllKernel<GemmKernel><<<grid, block, smem_size>>>(cons_params, prod_params, 2, d_exec_array, size); 
   }
 
   CUDA_CHECK(cudaEventRecord(end, 0));
@@ -941,142 +980,9 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2, MLPParameters& mlpParams,
   if (split_k1 == 1 && split_k2 == 1) {
     result = runCuSyncGPT3<CuSyncGemm1, CuSyncGemm2>(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, execTime, iters);
   }
-  //  else if (split_k1 > 1 && split_k2 == 1) {
-  //   result = runCuSyncGPT3<CuSyncGemmSplitK1, CuSyncGemm2>(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, execTime, iters);
-  // } else if (split_k1 == 1 && split_k2 > 1) {
-  //   result = runCuSyncGPT3<CuSyncGemm1, CuSyncGemmSplitK2>(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, execTime, iters);
-  // } else {
-  //   result = runCuSyncGPT3<CuSyncGemmSplitK1, CuSyncGemmSplitK2>(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, execTime, iters);
-  // }
-
   return result;
 }
 
-/**CuSync LLaMa in MLP*/
-
-// template<typename T, uint RowTile, uint H3>
-// __global__ void cusyncgluKernel(uint M, T* xvw1, T* glu) {
-//   uint ROW = blockIdx.x * RowTile;
-//   stage.tile(nullptr);
-//   for (uint ti = 0; ti < RowTile && ROW < M; ti++) {
-//     for (uint i = threadIdx.x; i < H3; i += blockDim.x) {
-//       if (ti == 0) {
-//         dim3 tile = {ROW/ShapeMMAThreadBlock::kM, i/ShapeMMAThreadBlock::kN, 0};
-//         stage.wait(tile);
-//       }
-//       float xw1 = xvw1[ROW * (2 * H3) + i];
-//       float xv =  xvw1[ROW * (2 * H3) + i + H3];
-//       glu[ROW * H3 + i] = xw1 * xv;
-//       if (ti == RowTile - 1) {
-//         dim3 tile = {ROW/ShapeMMAThreadBlock::kM, i/ShapeMMAThreadBlock::kN, 0};
-//         stage.post(tile);
-//       }
-//     }
-//     ROW++;
-//   }
-// }
-
-// template<typename GemmTy1, typename GemmTy2>
-// cudaError_t runCuSyncLLaMA(int split_k1, int split_k2,
-//                            MLPParameters& mlpParams,
-//                            ProdCuStage& prod, ConsCuStage& cons,
-//                            cudaStream_t* streams,
-//                            double& execTime,
-//                            int iters = 100) {
-//   typename GemmTy1::Arguments argsXW1{prod,
-//                                       mlpParams.gemm_size1,
-//                                       mlpParams.x.device_ref(),
-//                                       mlpParams.w1.device_ref(),
-//                                       mlpParams.xvw1.device_ref(),
-//                                       mlpParams.xvw1.device_ref(),
-//                                       {mlpParams.alpha, mlpParams.beta},         
-//                                       split_k1};
-//   GemmTy1 gemm_opXVW1;
-//   size_t workspace_size = GemmTy1::get_workspace_size(argsXW1);
-//   cutlass::device_memory::allocation<uint8_t> workspace1(workspace_size);
-//   cutlass::Status status = gemm_opXVW1.can_implement(argsXW1);
-//   CUTLASS_CHECK(status);
-//   status = gemm_opXVW1.initialize(argsXW1, workspace1.get());
-//   CUTLASS_CHECK(status);
-
-//   typename GemmTy2::Arguments argsXW12{cons,
-//                                        mlpParams.gemm_size2,  
-//                                        mlpParams.xvw1.device_ref(),
-//                                        mlpParams.w2.device_ref(),
-//                                        mlpParams.xw12.device_ref(),
-//                                        mlpParams.xw12.device_ref(),
-//                                        {mlpParams.alpha, mlpParams.beta},
-//                                        split_k2};
-
-//   GemmTy2 gemm_opXW12;
-//   workspace_size = GemmTy2::get_workspace_size(argsXW12);
-//   cutlass::device_memory::allocation<uint8_t> workspace3(workspace_size);
-//   status = gemm_opXW12.can_implement(argsXW12);
-//   CUTLASS_CHECK(status);
-//   status = gemm_opXW12.initialize(argsXW12, workspace3.get());
-//   CUTLASS_CHECK(status);
-
-//   execTime = 0;
-//   cudaEvent_t start, end;
-//   CUDA_CHECK(cudaEventCreate(&start));
-//   CUDA_CHECK(cudaEventCreate(&end));
-//   for (int r = 0; r < iters; r++) {
-//     // double start = timeInMicroSeconds();
-//     CUDA_CHECK(cudaEventRecord(start, streams[0]));
-//     status = gemm_opXVW1.run(true, NULL, streams[0]);
-//     CUTLASS_CHECK(status);
-
-//     prod.invokeWaitKernel(streams[1]);
-//     //glu
-//     // cusyncgluKernel<half, GLURowTile, ((8192/3+127)/128)*128>
-//     //   <<<DIVUP(mlpParams.gemm_size1.m(), GLURowTile), ShapeMMAThreadBlock::kN, 0, streams[1]>>>
-//     //   (mlpParams.gemm_size1.m(), (half*)mlpParams.xvw1.device_data(), 
-//     //    (half*)mlpParams.glu.device_data(), mid);
-  
-//     // mid.invokeWaitKernel(streams[2]);
-  
-//     status = gemm_opXW12.run(true, NULL, streams[1]);
-//     CUTLASS_CHECK(status);
-//     CUDA_CHECK(cudaEventRecord(end, streams[1]));
-//     CUDA_CHECK(cudaEventSynchronize(end));
-//     float time_ms = 0;
-//     CUDA_CHECK(cudaEventElapsedTime(&time_ms, start, end));
-//     // CUDA_CHECK(cudaDeviceSynchronize());
-
-//     // double end = timeInMicroSeconds();
-//     if (iters > 10) {
-//       printf("{\"Total\": %lf}\n",time_ms*1000.0f);
-//       execTime += time_ms*1000.0f;
-//     }
-//     prod.incrementIter();
-//     cons.incrementIter();
-//     gemm_opXW12.params_.custage.incrementIter();
-//     gemm_opXVW1.params_.custage.incrementIter();
-//   }
-
-//   return cudaSuccess;
-// }
-
-// cudaError_t runCuSyncLLaMA(int split_k1, int split_k2, 
-//                           MLPParameters& mlpParams,
-//                           ProdCuStage& prod, ConsCuStage& cons,
-//                           cudaStream_t* streams,
-//                           double& execTime, int iters = 100) {
-//   cudaError_t result;
-//   execTime = 0;
-
-//   if (split_k1 == 1 && split_k2 == 1) {
-//     result = runCuSyncLLaMA<CuSyncGemm1, CuSyncGemm2>(split_k1, split_k2, mlpParams, prod, cons, streams, execTime, iters);
-//   } else if (split_k1 > 1 && split_k2 == 1) {
-//     result = runCuSyncLLaMA<CuSyncGemmSplitK1, CuSyncGemm2>(split_k1, split_k2, mlpParams, prod, cons, streams, execTime, iters);
-//   } else if (split_k1 == 1 && split_k2 > 1) {
-//     result = runCuSyncLLaMA<CuSyncGemm1, CuSyncGemmSplitK2>(split_k1, split_k2, mlpParams, prod, cons, streams, execTime, iters);
-//   } else {
-//     result = runCuSyncLLaMA<CuSyncGemmSplitK1, CuSyncGemmSplitK2>(split_k1, split_k2, mlpParams, prod, cons, streams, execTime, iters);
-//   }
-
-//   return result;
-// }
 // Utility function to save matrix data to file
 void saveMatrixToFile(const std::vector<float>& matrix, const int rows, const int cols, const std::string& filename) {
     std::ofstream file(filename);

@@ -34,7 +34,8 @@ using namespace cusync;
 
 //Define Producer and Consumer CuStage
 const int BLOCK_SIZE = 32;
-using Sync = TileSync<IdentityOrder, BLOCK_SIZE, BLOCK_SIZE>;
+// using Sync = TileSync<IdentityOrder, BLOCK_SIZE, BLOCK_SIZE>;  // RowSync<ShapeThreadBlock1::kM>
+using Sync = RowSync<BLOCK_SIZE>;
 using ProdCuStage = CuStage<IdentityOrder, NoSync, Sync>;
 using ConsCuStage = CuStage<IdentityOrder, Sync, NoSync>;
 
@@ -44,6 +45,11 @@ __global__ void MatrixMulCUDA(CuStageTy custage, float *C, float *A,
   __shared__ int tileSh[3];
   // Get tile to compute by this thread block
   dim3 tile = custage.tile((dim3*)&tileSh[0]);
+
+  if(threadIdx.x==0&&threadIdx.y==0){
+    printf("Tile: (%d, %d, %d), real_blx=%d, real_bly=%d\n", tile.x, tile.y, tile.z, blockIdx.x, blockIdx.y);
+  }
+  
 
   // Block index
   int bx = tile.x;
@@ -195,7 +201,6 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
   // Setup execution parameters
   dim3 threads(block_size, block_size, 1);
   dim3 grid(dimsB.x / threads.x, dimsA.y / threads.y, 1);
-  
   // Create CuSync and CuStage
   Sync sync;
   dim3 tilesize = threads;
@@ -215,8 +220,8 @@ int MatrixMultiply(int argc, char **argv, int block_size, const dim3 &dimsA,
   prod.invokeWaitKernel(cons_stream);
   
   //Invoke consumer kernel (E = C * D)
-  MatrixMulCUDA<ConsCuStage>
-        <<<grid, threads, 0, cons_stream>>>(cons, d_E, d_C, d_D, dimsA.x, dimsB.x);
+  // MatrixMulCUDA<ConsCuStage>
+  //       <<<grid, threads, 0, cons_stream>>>(cons, d_E, d_C, d_D, dimsA.x, dimsB.x);
   
   CUDA_CHECK(cudaDeviceSynchronize());
 
@@ -303,7 +308,7 @@ int main(int argc, char **argv) {
 
   int block_size = BLOCK_SIZE;
 
-  dim3 dimsA(4 * 2 * block_size, 4 * 2 * block_size, 1);
+  dim3 dimsA(4* block_size, 4 * block_size, 1);
   dim3 dimsB = dimsA;
   dim3 dimsD = dimsA;
 

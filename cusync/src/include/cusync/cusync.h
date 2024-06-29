@@ -123,7 +123,7 @@ private:
   //Call TileOrder parameter to generate tile order and store 
   //it in tileOrder
   CuSyncError buildScheduleBuffer() {
-    dim3* hTileOrder = new dim3[numTiles()];
+    dim3* hTileOrder = new dim3[numTiles()]; // 创建数组。设定数组大小。
     bool errInvalidLinearBlockIndex = false;
 
     CUDA_CHECK(cudaMalloc(&tileCounter, sizeof(int)));

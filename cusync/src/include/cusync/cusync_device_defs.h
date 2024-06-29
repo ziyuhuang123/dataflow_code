@@ -76,12 +76,13 @@ namespace cusync {
    */  
   CUSTAGE_METHOD_DEF(dim3) tile(dim3* shared_storage) {
     if (!getAvoidWaitKernel()) {
-      if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0 && 
-          blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0 && isProducer()) {
+      // 如果没有定义avoidWaitKernel，那么就会进入这个分支。一般情况下，这个分支是会进入的。
+      if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0 && isProducer()) {
         *kernelExecuted_ = iter;
       }
     }
     if (!getAvoidCustomOrder()) {
+      // 如果没有定义getAvoidCustomOrder，那么就会进入这个分支。一般情况下，这个分支是会进入的。
       if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
         if (shared_storage != nullptr) {
           uint32_t linear_id = atomicAdd(tileCounter, 1);
@@ -89,14 +90,14 @@ namespace cusync {
             *tileCounter = 0;
           }
           *shared_storage = tileOrder[linear_id];
-        }
+        } // tileOrder是在cusync.h里的buildScheduleBuffer设置的。这里用第一个线程取出存储到共享内存里。就一个值。然后下面__sync，再各自取值。
       }    
-
       if (shared_storage != nullptr) {
         __syncthreads();
+        // 所有的都会从这里返回的！因为上面已经设置了shared_storage的值。
         return *shared_storage;
       }
-      return blockIdx;
+      return blockIdx;  // 一般是不从这里返回的！
     } else {
       return blockIdx;
     }
