@@ -934,7 +934,6 @@ public:
           pipe_state.warp_loaded_frag_A_[(warp_mma_k + 1) % 2],
           pipe_state.warp_loaded_frag_B_[(warp_mma_k + 1) % 2]);
       }
-
     }
   }
 
