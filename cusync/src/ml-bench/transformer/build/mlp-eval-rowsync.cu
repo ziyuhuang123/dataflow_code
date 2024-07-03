@@ -937,6 +937,20 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   //     dim3(2, 0, 0), dim3(3, 0, 0), dim3(2, 1, 0), dim3(3, 1, 0),
   //     dim3(2, 2, 0), dim3(3, 2, 0), dim3(2, 3, 0), dim3(3, 3, 0)
   // };  // 基础Z字形
+
+  dim3 exec_seq[16] = {
+      dim3(0, 0, 0), dim3(1, 0, 0), dim3(0, 1, 0), dim3(1, 1, 0),
+      dim3(2, 0, 0), dim3(3, 0, 0), dim3(2, 1, 0), dim3(3, 1, 0),
+      dim3(0, 2, 0), dim3(1, 2, 0), dim3(0, 3, 0), dim3(1, 3, 0),
+      dim3(2, 2, 0), dim3(3, 2, 0), dim3(2, 3, 0), dim3(3, 3, 0)
+  };  // 嵌套Z字形
+
+  dim3 exec_seq[16] = {
+      dim3(0, 0, 0), dim3(1, 0, 0), dim3(0, 1, 0), dim3(1, 1, 0),
+      dim3(2, 0, 0), dim3(3, 0, 0), dim3(2, 1, 0), dim3(3, 1, 0),
+      dim3(0, 2, 0), dim3(1, 2, 0), dim3(0, 3, 0), dim3(1, 3, 0),
+      dim3(2, 2, 0), dim3(3, 2, 0), dim3(2, 3, 0), dim3(3, 3, 0)
+  };  // 嵌套Z字形
   dim3* d_exec_seq;
   cudaMalloc(&d_exec_seq, sizeof(dim3) * 16);
 
