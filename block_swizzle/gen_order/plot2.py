@@ -1,8 +1,27 @@
+# 尾部相连-(0,0)-(0,1)-(1,0)-(1,1)式Z型-纵向
 import matplotlib.pyplot as plt
 import numpy as np
 
+def generate_zigzag_order(M, N, t):  # 将M和N互换
+    order = []
+
+    for i in range(0, N, t):  # 原来是M，现在是N
+        if (i // t) % 2 == 0:
+            for j in range(M):  # 原来是N，现在是M
+                for k in range(t):
+                    if i + k < N:  # 原来是M，现在是N
+                        order.append((i + k, j))
+        else:
+            for j in range(M - 1, -1, -1):  # 原来是N，现在是M
+                for k in range(t):
+                    if i + k < N:  # 原来是M，现在是N
+                        order.append((i + k, j))
+
+    return order
+
+
 def plot_compute_order_with_arrows(M, N, compute_order):
-    fig, ax = plt.subplots(figsize=(N + 2, M + 2))  # 增加画布大小
+    fig, ax = plt.subplots(figsize=(N, M))
 
     # 画出格子
     for x in range(N + 1):
@@ -30,20 +49,17 @@ def plot_compute_order_with_arrows(M, N, compute_order):
     ax.set_yticklabels(np.arange(M, 0, -1))
     ax.xaxis.tick_top()
 
-    # 添加x和y标签
-    ax.set_xlabel('x', fontsize=14)
-    ax.set_ylabel('y', fontsize=14)
-
     plt.title('Compute Order with Arrows for Matrix C Blocks')
     plt.gca().set_aspect('equal', adjustable='box')
     plt.show()
 
-M = 2
-N = 6
-best_order = [(0, 0), (1, 0), (0, 1), (1, 1), (2, 0), (3, 0), (2, 1), (3, 1), (4, 0), (5, 0), (4, 1), (5, 1)]
-# [[(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1), (3, 0), (4, 0), (5, 0), (3, 1), (4, 1), (5, 1)], [(0, 0), (1, 0), (0, 1), (1, 1), (2, 0), (3, 0), (2, 1), (3, 1), (4, 0), (5, 0), (4, 1), (5, 1)]]
+M = 6 # 行数
+N = 6 # 列数
+t = 3
+
+order = generate_zigzag_order(M, N, t)
+print(order)
+plot_compute_order_with_arrows(M, N, order)
 
 
-
-# 使用前面找到的最优计算顺序来画图
-plot_compute_order_with_arrows(M, N, best_order)
+# 明天继续修改为提供两种Z宽度的选择
