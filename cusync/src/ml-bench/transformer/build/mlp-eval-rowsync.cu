@@ -108,6 +108,12 @@ using SmArch = cutlass::arch::Sm80;
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <iostream>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <string>
+#include <regex>
+
 
 // Utility to check CUDA and cuBLAS functions return values
 #define CHECK_CUDA_ERROR(call) { \
@@ -231,7 +237,7 @@ class BaseMLPGemm : public cutlass::gemm::device::Gemm<ElementInputA, LayoutInpu
                                                        SmArch, ShapeThreadBlock,
                                                        ShapeWarp, ShapeMMAOp,
                                                        EpilogueOp, 
-                                                       cutlass::gemm::threadblock::CuSyncGemmHorizontalThreadblockSwizzle,
+                                                       cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<16>,
                                                        NumStages, 8, 8, splitK> {};
 // Baseline GeMMs
 using Gemm1 = BaseMLPGemm<EpilogueOp1, ShapeThreadBlock1, ShapeWarp1, NumStages1, false>;
@@ -305,10 +311,10 @@ struct MLPParameters {
     model = model_;
 
     if (model == "gpt3") {
-      gemm_size1 = cutlass::gemm::GemmCoord(batch, 512, 512);
-      gemm_size2 = cutlass::gemm::GemmCoord(batch, 512, 512);
-      // gemm_size1 = cutlass::gemm::GemmCoord(batch, 14336, 4096);
-      // gemm_size2 = cutlass::gemm::GemmCoord(batch, 4096, 14336);
+      // gemm_size1 = cutlass::gemm::GemmCoord(batch, 512, 512);
+      // gemm_size2 = cutlass::gemm::GemmCoord(batch, 512, 512);
+      gemm_size1 = cutlass::gemm::GemmCoord(batch, 14336, 4096);
+      gemm_size2 = cutlass::gemm::GemmCoord(batch, 4096, 14336);
     } else if (model=="llama") {
       int H = 8192;
       int d = ((H/3 + 127)/128)*128;
@@ -808,6 +814,57 @@ void AllKernel(typename Operator::Params<ConsCuStage> cons_params, typename Oper
   // }
 }
 
+// 读取文件中特定行的函数
+std::string readOrderLine(const std::string& filePath, int orderLine) {
+    std::ifstream file(filePath);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open file");
+    }
+
+    std::string line;
+    int currentLine = 0;
+    while (std::getline(file, line)) {
+        currentLine++;
+        if (currentLine == orderLine) {
+            return line;
+        }
+    }
+    throw std::runtime_error("Error reading file or line number out of range");
+}
+
+// 提取方括号中的内容并转换为dim3数组
+dim3* extractOrderContent(const std::string& line, int& array_size) {
+    size_t start = line.find("[");
+    size_t end = line.rfind("]");
+    if (start == std::string::npos || end == std::string::npos || start >= end) {
+        throw std::runtime_error("Invalid order line format");
+    }
+    std::string content = line.substr(start + 1, end - start - 1);
+    // std::cout << "Extracted content: " << content << std::endl;  // 添加调试信息
+
+    std::vector<dim3> orders;
+    std::regex regex_pattern(R"(\((\d+),\s*(\d+),\s*(\d+)\))");
+    std::smatch match;
+
+    std::string::const_iterator search_start(content.cbegin());
+    while (std::regex_search(search_start, content.cend(), match, regex_pattern)) {
+        int x = std::stoi(match[1]);
+        int y = std::stoi(match[2]);
+        int z = std::stoi(match[3]);
+        orders.push_back(dim3(x, y, z));
+        search_start = match.suffix().first;
+    }
+
+    array_size = orders.size();  // 更新 array_size
+
+    dim3* exec_seq = new dim3[array_size];
+    for (size_t i = 0; i < orders.size(); ++i) {
+        exec_seq[i] = orders[i];
+    }
+
+    return exec_seq;
+}
+
 /*CuSync GPT-3 MLP*/
 template<typename GemmTy1, typename GemmTy2>
 cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
@@ -816,7 +873,11 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
                           cudaStream_t producer_stream, 
                           cudaStream_t consumer_stream,
                           double& execTime,
-                          int iters = 100) {
+                          int iters,
+                          int order_line) {
+
+
+
   // typename GemmTy1::Arguments args1{prod,
   typename GemmTy1::Arguments args1{mlpParams.gemm_size1,
                                      mlpParams.x.device_ref(),
@@ -914,7 +975,8 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
 
   printf("grid_shape1.m=%d, grid_shape1.n=%d,grid_shape1.k=%d,grid_shape2.m=%d, grid_shape2.n=%d,grid_shape2.k=%d\n", grid_shape1.m(),grid_shape1.n(),grid_shape1.k(),grid_shape2.m(),grid_shape2.n(),grid_shape2.k());
 
-  dim3 grid = {grid_shape1.m()*grid_shape1.n()+grid_shape2.n()*grid_shape2.m(), 1, 1};
+  // dim3 grid = {grid_shape1.m()*grid_shape1.n()+grid_shape2.n()*grid_shape2.m(), 1, 1};
+  dim3 grid = {grid_shape1.m()*grid_shape1.n(), 1, 1};
   // dim3 block = {128, 1, 1};
   dim3 block(GemmKernel::kThreadCount, 1, 1);
   // int smem_size = 99 << 10;  // ????
@@ -925,12 +987,24 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   cudaFuncSetAttribute(AllKernel<GemmKernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
 
 
-  dim3 exec_seq[16] = {
-      dim3(0, 0, 0), dim3(1, 0, 0), dim3(2, 0, 0), dim3(3, 0, 0),
-      dim3(0, 1, 0), dim3(1, 1, 0), dim3(2, 1, 0), dim3(3, 1, 0),
-      dim3(0, 2, 0), dim3(1, 2, 0), dim3(2, 2, 0), dim3(3, 2, 0),
-      dim3(0, 3, 0), dim3(1, 3, 0), dim3(2, 3, 0), dim3(3, 3, 0)
-  }; // origin policy，直接算完一整行。
+
+  std::string filePath = "/home/zyhuang/temp_can/dataflow_code/block_swizzle/gen_order/new_gen_order/orders.txt";
+  
+  std::string line = readOrderLine(filePath, order_line);
+  int array_size = grid_shape1.m() * grid_shape1.n();
+  std::cout << "array_size = " << array_size << std::endl;
+
+  auto exec_seq = extractOrderContent(line, array_size);
+
+  // TODO: 将提取的内容转换为 dim3 数组
+  // 根据 grid_shape1.m() * grid_shape1.n() 的长度来处理 orders
+
+  // dim3 exec_seq[16] = {
+  //     dim3(0, 0, 0), dim3(1, 0, 0), dim3(2, 0, 0), dim3(3, 0, 0),
+  //     dim3(0, 1, 0), dim3(1, 1, 0), dim3(2, 1, 0), dim3(3, 1, 0),
+  //     dim3(0, 2, 0), dim3(1, 2, 0), dim3(2, 2, 0), dim3(3, 2, 0),
+  //     dim3(0, 3, 0), dim3(1, 3, 0), dim3(2, 3, 0), dim3(3, 3, 0)
+  // }; // origin policy，直接算完一整行。
   // dim3 exec_seq[16] = {
   //     dim3(0, 0, 0), dim3(1, 0, 0), dim3(0, 1, 0), dim3(1, 1, 0),
   //     dim3(0, 2, 0), dim3(1, 2, 0), dim3(0, 3, 0), dim3(1, 3, 0),
@@ -938,24 +1012,25 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   //     dim3(2, 2, 0), dim3(3, 2, 0), dim3(2, 3, 0), dim3(3, 3, 0)
   // };  // 基础Z字形
 
-  dim3 exec_seq[16] = {
-      dim3(0, 0, 0), dim3(1, 0, 0), dim3(0, 1, 0), dim3(1, 1, 0),
-      dim3(2, 0, 0), dim3(3, 0, 0), dim3(2, 1, 0), dim3(3, 1, 0),
-      dim3(0, 2, 0), dim3(1, 2, 0), dim3(0, 3, 0), dim3(1, 3, 0),
-      dim3(2, 2, 0), dim3(3, 2, 0), dim3(2, 3, 0), dim3(3, 3, 0)
-  };  // 嵌套Z字形
+  // dim3 exec_seq[16] = {
+  //     dim3(0, 0, 0), dim3(1, 0, 0), dim3(0, 1, 0), dim3(1, 1, 0),
+  //     dim3(2, 0, 0), dim3(3, 0, 0), dim3(2, 1, 0), dim3(3, 1, 0),
+  //     dim3(0, 2, 0), dim3(1, 2, 0), dim3(0, 3, 0), dim3(1, 3, 0),
+  //     dim3(2, 2, 0), dim3(3, 2, 0), dim3(2, 3, 0), dim3(3, 3, 0)
+  // };  // 嵌套Z字形
 
-  dim3 exec_seq[16] = {
-      dim3(0, 0, 0), dim3(1, 0, 0), dim3(0, 1, 0), dim3(1, 1, 0),
-      dim3(2, 0, 0), dim3(3, 0, 0), dim3(2, 1, 0), dim3(3, 1, 0),
-      dim3(0, 2, 0), dim3(1, 2, 0), dim3(0, 3, 0), dim3(1, 3, 0),
-      dim3(2, 2, 0), dim3(3, 2, 0), dim3(2, 3, 0), dim3(3, 3, 0)
-  };  // 嵌套Z字形
+  // dim3 exec_seq[16] = {
+  //     dim3(0, 0, 0), dim3(1, 0, 0), dim3(0, 1, 0), dim3(1, 1, 0),
+  //     dim3(2, 0, 0), dim3(3, 0, 0), dim3(2, 1, 0), dim3(3, 1, 0),
+  //     dim3(0, 2, 0), dim3(1, 2, 0), dim3(0, 3, 0), dim3(1, 3, 0),
+  //     dim3(2, 2, 0), dim3(3, 2, 0), dim3(2, 3, 0), dim3(3, 3, 0)
+  // };  // 嵌套Z字形
+
   dim3* d_exec_seq;
-  cudaMalloc(&d_exec_seq, sizeof(dim3) * 16);
+  cudaMalloc(&d_exec_seq, sizeof(dim3) * array_size);
 
   // 将数据从CPU复制到GPU
-  cudaMemcpy(d_exec_seq, exec_seq, sizeof(dim3) * 16, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_exec_seq, exec_seq, sizeof(dim3) * array_size, cudaMemcpyHostToDevice);
 
 
   execTime = 0;
@@ -981,12 +1056,12 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
 cudaError_t runCuSyncGPT3(int split_k1, int split_k2, MLPParameters& mlpParams,
                           ProdCuStage& prod, ConsCuStage& cons,
                           cudaStream_t producer_stream, cudaStream_t consumer_stream,
-                          double& execTime, int iters = 100) {
+                          double& execTime, int iters, int order_line) {
   cudaError_t result;
   execTime = 0;
 
   if (split_k1 == 1 && split_k2 == 1) {
-    result = runCuSyncGPT3<CuSyncGemm1, CuSyncGemm2>(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, execTime, iters);
+    result = runCuSyncGPT3<CuSyncGemm1, CuSyncGemm2>(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, execTime, iters, order_line);
   }
   return result;
 }
@@ -1023,21 +1098,22 @@ int run(int argc, char* argv[]) {
   //   return 0;
   // }
   
-  const uint NUM_ARGS = 6;
-  std::string argNames[NUM_ARGS] = {"--model", "--batch", "--check", "--split-k1", "--split-k2", "--policy"};
+  const uint NUM_ARGS = 7;  // 更新参数数量
+  std::string argNames[NUM_ARGS] = {"--model", "--batch", "--check", "--split-k1", "--split-k2", "--policy", "--order-line"};
   std::string argHelp[NUM_ARGS] = {"GPT3 or LLaMa", "Batch size", "Check results", 
-                                   "Split K for first GeMM", "Split K for second GeMM",
-                                   "Policy to execute"};
+                                  "Split K for first GeMM", "Split K for second GeMM",
+                                  "Policy to execute", "Line number of orders file"};
   
-  if (argc < NUM_ARGS+1) {
-    std::cout << "usage: " << std::endl
-              << argNames[0] << " gpt3|llama " << argHelp[0] << std::endl 
-              << argNames[1] << " <int>" << argHelp[1] << std::endl
-              << argNames[2] << " true|false" << argHelp[2] << std::endl
-              << argNames[3] << " <int> " << argHelp[3] << std::endl
-              << argNames[4] << " <int> " << argHelp[4] << std::endl
-              << argNames[5] << " baseline|cusync" << argHelp[5] << std::endl;
-    return 0;
+  if (argc < NUM_ARGS + 1) {
+      std::cout << "usage: " << std::endl
+                << argNames[0] << " gpt3|llama " << argHelp[0] << std::endl 
+                << argNames[1] << " <int> " << argHelp[1] << std::endl
+                << argNames[2] << " true|false " << argHelp[2] << std::endl
+                << argNames[3] << " <int> " << argHelp[3] << std::endl
+                << argNames[4] << " <int> " << argHelp[4] << std::endl
+                << argNames[5] << " baseline|cusync " << argHelp[5] << std::endl
+                << argNames[6] << " <int> " << argHelp[6] << std::endl;
+      return 0;
   }
 
   std::string model = "", policy = "";
@@ -1045,6 +1121,7 @@ int run(int argc, char* argv[]) {
   bool doChecking = false;
   uint split_k1 = 1;
   uint split_k2 = 1;
+  int order_line = -1;  // 添加默认值用于未提供参数时的检查
 
   for (int i = 1; i < argc; ++i) {
     std::string arg = std::string(argv[i]);
@@ -1074,6 +1151,9 @@ int run(int argc, char* argv[]) {
     } else if (arg.find(argNames[5]) == 0) {
       policy = std::string(argv[i+1]);
       i=i+1;
+    } else if (arg.find(argNames[6]) == 0) {
+      order_line = std::stoi(argv[i+1]);
+      i = i + 1;
     }
   }
 
@@ -1187,7 +1267,7 @@ int run(int argc, char* argv[]) {
     
     double overlapTime = 0;
     
-    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, 1);
+    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, 1, order_line);
     
 
     CUDA_CHECK(cudaDeviceSynchronize());
@@ -1199,12 +1279,12 @@ int run(int argc, char* argv[]) {
       }
     }
 
-    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, warmup);
+    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, warmup, order_line);
     
     CUDA_CHECK(cudaDeviceSynchronize());
     printf("START-OVERLAPPED:\n");
     
-    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, epochs);
+    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, epochs, order_line);
     
     CUDA_CHECK(result);
     printf("END-OVERLAPPED:\n");

@@ -99,7 +99,7 @@ inner_width = 2
 
 
 # 针对每个t组合生成对应的order
-all_orders = generate_zigzag_order(M, N, outer_width, inner_width)
+all_orders = generate_zigzag_order_4(M, N, outer_width, inner_width)
 print(all_orders)
 
 plot_compute_order_with_arrows(M, N, all_orders)

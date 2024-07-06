@@ -212,32 +212,44 @@ def write_orders_to_file(file, orders, order_name, t1=None, outer_width=None, in
     elif outer_width is not None and inner_width is not None:
         file.write(f'outer_width = {outer_width}, inner_width = {inner_width} {order_name}: {orders}\n')
 
+def write_orders_to_file(file, orders, order_name, t1=None, outer_width=None, inner_width=None):
+    if t1 is not None:
+        file.write(f't1 = {t1} {order_name}: {orders}\n')
+    elif outer_width is not None and inner_width is not None:
+        file.write(f'outer_width = {outer_width}, inner_width = {inner_width} {order_name}: {orders}\n')
+
+def append_zero_to_orders(orders):
+    return [(x, y, 0) for (x, y) in orders]
+
 with open('orders.txt', 'w') as f:
     # 遍历 t1 从 2^1 到 2^7
     for i in tqdm(range(1, 8), desc="Processing t1"):
         t1 = 2 ** i
         
         all_orders_0 = generate_zigzag_order_0(M, N, t1)
+        all_orders_0 = append_zero_to_orders(all_orders_0)
         write_orders_to_file(f, all_orders_0, 'Order 0', t1=t1)
         del all_orders_0  # 删除对象释放内存
         gc.collect()  # 强制垃圾回收
         
         all_orders_1 = generate_zigzag_order_1(M, N, t1)
+        all_orders_1 = append_zero_to_orders(all_orders_1)
         write_orders_to_file(f, all_orders_1, 'Order 1', t1=t1)
         del all_orders_1
         gc.collect()
         
         all_orders_2 = generate_zigzag_order_2(M, N, t1)
+        all_orders_2 = append_zero_to_orders(all_orders_2)
         write_orders_to_file(f, all_orders_2, 'Order 2', t1=t1)
         del all_orders_2
         gc.collect()
         
         all_orders_3 = generate_zigzag_order_3(M, N, t1)
+        all_orders_3 = append_zero_to_orders(all_orders_3)
         write_orders_to_file(f, all_orders_3, 'Order 3', t1=t1)
         del all_orders_3
         gc.collect()
-        
-        f.write('\n')
+
 
     # 遍历 outer_width 从 2^1 到 2^8，并将所有 order 写入文件
     for i in tqdm(range(1, 9), desc="Processing outer_width and inner_width"):
@@ -245,8 +257,7 @@ with open('orders.txt', 'w') as f:
         inner_width = 2 ** (i - 1)
         
         all_orders_4 = generate_zigzag_order_4(M, N, outer_width, inner_width)
+        all_orders_4 = append_zero_to_orders(all_orders_4)
         write_orders_to_file(f, all_orders_4, 'Order 4', outer_width=outer_width, inner_width=inner_width)
         del all_orders_4
         gc.collect()
-        
-        f.write('\n')
