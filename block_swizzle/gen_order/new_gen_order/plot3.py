@@ -1,4 +1,4 @@
-# 单独Z型-(0,0)-(0,1)-(1,0)-(1,1)式Z型-纵向-提供两种Z宽度可选
+# 单独Z型-(0,0)-(0,1)-(1,0)-(1,1)式Z型-横向-提供两种Z宽度可选
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -41,42 +41,41 @@ def plot_compute_order_with_arrows(M, N, compute_order):
     plt.gca().set_aspect('equal', adjustable='box')
     plt.show()
 
-def generate_zigzag_order(M, N, T1, T2):
-    def find_combinations(N, t1, t2):
-        combinations = []
-        for i in range(N // t1 + 1):
-            for j in range(N // t2 + 1):
-                if i * t1 + j * t2 == N:
-                    combinations.append([t1] * i + [t2] * j)
-        return combinations
+def generate_zigzag_order_2(M, N, T1):
+    def find_combination(N, t1):
+        combination = []
+        while N > 0:
+            if N >= t1:
+                combination.append(t1)
+                N -= t1
+            else:
+                combination.append(N)
+                break
+        return combination
 
-    t_combo = find_combinations(N, T1, T2)
+    t_combo = find_combination(M, T1)
     orders = []
-    for t_set in t_combo:
-        order = []
-        current_x_index = 0
-        for t in t_set:
-            for j in range(M):
-                for k in range(t):
-                    if current_x_index < N:
-                        order.append((current_x_index+k, j))
-            current_x_index += t
-        orders.append(order)
+    current_x_index = 0
+    for t in t_combo:
+        for j in range(N):
+            for k in range(t):
+                if current_x_index < M:
+                    orders.append((j, current_x_index + k))
+        current_x_index += t
     return orders
 
 # 示例
-M = 2
+M = 9
 N = 6
-t1 = 2
-t2 = 3
+t1 = 5
+# t2 = 3
 
 # 获取所有可能的t组合
-# combinations = find_combinations(N, t1, t2)
+# combinations = find_combinations(M, t1, t2)
 # print(combinations)
 # 针对每个t组合生成对应的order
 
-all_orders = generate_zigzag_order(M, N, t1, t2)
+all_orders = generate_zigzag_order_2(M, N, t1)
 
 print(all_orders)
-for one_order in all_orders:
-    plot_compute_order_with_arrows(M, N, one_order)
+plot_compute_order_with_arrows(M, N, all_orders)

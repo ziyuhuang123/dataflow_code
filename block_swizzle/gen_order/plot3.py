@@ -1,6 +1,7 @@
-# 尾部相连-(0,0)-(0,1)-(1,0)-(1,1)式Z型-纵向-提供两种Z宽度可选
+# 单独Z型-(0,0)-(0,1)-(1,0)-(1,1)式Z型-横向-提供两种Z宽度可选
 import matplotlib.pyplot as plt
 import numpy as np
+
 
 
 def plot_compute_order_with_arrows(M, N, compute_order):
@@ -49,38 +50,28 @@ def generate_zigzag_order(M, N, T1, T2):
                     combinations.append([t1] * i + [t2] * j)
         return combinations
 
-    t_combo = find_combinations(N, T1, T2)
+    t_combo = find_combinations(M, T1, T2)
     orders = []
     for t_set in t_combo:
         order = []
         current_x_index = 0
-        tail_connect_flag = False
         for t in t_set:
-            if tail_connect_flag == 0:
-                for j in range(M):
-                    for k in range(t):
-                        if current_x_index < N:
-                            order.append((current_x_index + k, j))
-                current_x_index += t
-                tail_connect_flag = not tail_connect_flag
-            elif tail_connect_flag == 1:
-                for j in range(M - 1, -1, -1):
-                    for k in range(t):
-                        if current_x_index < N:
-                            order.append((current_x_index + k, j))
-                current_x_index += t
-                tail_connect_flag = not tail_connect_flag
+            for j in range(N):
+                for k in range(t):
+                    if current_x_index < M:
+                        order.append((j, current_x_index+k))
+            current_x_index += t
         orders.append(order)
     return orders
 
 # 示例
-M = 2
-N = 6
+M = 6
+N = 4
 t1 = 2
 t2 = 3
 
 # 获取所有可能的t组合
-# combinations = find_combinations(N, t1, t2)
+# combinations = find_combinations(M, t1, t2)
 # print(combinations)
 # 针对每个t组合生成对应的order
 
