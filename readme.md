@@ -23,6 +23,11 @@ Rethinking Latency-Aware DNN Design With GPU Tail Effect Analysis（1. 揭示了
 | Souffle   | Bert等。。  |kernel融合（global）以消除启动开销；global sync|
 | Optimus   |        |          |
 | MASTRO   |        |           |
+lean attention(虽然还没发出来吗。。)
+block parallel transformer
+Rethinking Latency-Aware DNN Design with GPU Tail Effect Analysis
+streamK
+
 
 0512
 1. 今天写了GUI，能够设定矩阵乘法的MNK尺寸，cache的大小。每次点击方框能够计算当前cache内的值和截至目前的global memory access。并且有undo按钮回撤到上一步。作用是帮助理解为什么不同Z字形的memory access不一样，想获得某种intuition。

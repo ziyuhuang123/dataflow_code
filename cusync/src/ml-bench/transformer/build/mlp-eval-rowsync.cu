@@ -603,8 +603,8 @@ cudaError_t runBaselineGPT3(int split_k1, int split_k2,
   CUDA_CHECK(cudaEventRecord(start, 0));
 
   for (int r = 0; r < iters; r++) {    
-    status = gemm_op1(stream);
-    status = gemm_op2(stream);
+    status = gemm_op1(stream);  
+    // status = gemm_op2(stream);//为了检测方便，暂时注释掉
   }
 
   CUDA_CHECK(cudaEventRecord(end, 0));
