@@ -14,30 +14,33 @@ do
   batch_size=$(echo "2^$i" | bc)  # 使用 bc 进行指数计算
 
   # 生成对应的 orders 文件
-  python plot1.py --M $batch_size
+  python plot1.py --M $batch_size --output_dir /home/zyhuang/temp_can/delete_code
 
   # 读取生成的 orders 文件并逐行处理
-  input_file="orders_${batch_size}.txt"
+  input_file="/home/zyhuang/temp_can/delete_code/orders_${batch_size}.txt"
 
   order_line=1
   while IFS= read -r line
   do
-    # 提取 t1 = 或 outer_width = 的信息
+    # 提取 t1 = 或 outer_width = 的信息，并拼接 outer_width 和 inner_width
     parameter=$(echo "$line" | grep -oP '^(t1 = \d+|outer_width = \d+, inner_width = \d+)')
-  
+    parameter=$(echo "$parameter" | sed 's/outer_width = \([0-9]*\), inner_width = \([0-9]*\)/outer_width=\1,inner_width=\2/')
+
     # 提取 Order 的值
     order=$(echo "$line" | grep -oP 'Order \d+' | grep -oP '\d+')
-  
+
     # 如果没有找到有效的parameter或order，跳过此行
     if [ -z "$parameter" ] || [ -z "$order" ]; then
       echo "Skipping line due to missing parameter or order"
       continue
     fi
+
+    file_path="/home/zyhuang/temp_can/delete_code/orders_${batch_size}.txt"
   
     # 运行 ncu 命令并提取 L2 Hit Rate 和 sm__cycles_elapsed.avg
     echo "Running ncu for batch size $batch_size, parameter $parameter and order $order"
-    ncu_result=$(ncu --metrics sm__cycles_elapsed.avg,sm__cycles_elapsed.avg.per_second --target-processes all --section MemoryWorkloadAnalysis --clock-control=base --cache-control=all /home/zyhuang/temp_can/dataflow_code/cusync/src/ml-bench/transformer/build/mlp-eval-rowsync --batch $batch_size --check true --model gpt3 --split-k1 1 --split-k2 1 --policy cusync --order-line $order_line 2>&1)
-    
+    ncu_result=$(ncu --metrics sm__cycles_elapsed.avg,sm__cycles_elapsed.avg.per_second --target-processes all --section MemoryWorkloadAnalysis --clock-control=base --cache-control=all /home/zyhuang/temp_can/dataflow_code/cusync/src/ml-bench/transformer/build/mlp-eval-rowsync --batch $batch_size --check true --model gpt3 --split-k1 1 --split-k2 1 --policy cusync --order-line $order_line  --file-path $file_path 2>&1)
+
     # 输出 ncu 命令结果，便于调试
     echo "NCU Result for batch size $batch_size, parameter $parameter and order $order:"
     echo "$ncu_result"

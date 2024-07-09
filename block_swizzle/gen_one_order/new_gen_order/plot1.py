@@ -3,6 +3,7 @@
 import argparse
 from tqdm import tqdm
 import numpy as np
+import os
 
 # def plot_compute_order_with_arrows(M, N, compute_order):
 #     fig, ax = plt.subplots(figsize=(N + 2, M + 2))  # 增加画布大小
@@ -206,17 +207,23 @@ def generate_zigzag_order_4(M, N, Outer_width, Inner_width):
     return orders
 
 
+
 def write_orders_to_file(f, description, orders):
     f.write(f'{description} [')
     f.write(', '.join([f'({x}, {y}, 0)' for x, y in orders]))
     f.write(']\n')
 
+def main(M, output_dir):
 
-def main(M):
     N = 112
 
+    # 确保输出目录存在
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
     # 遍历 t1 从 2^1 到 2^7，并将所有 order 写入文件
-    with open(f'orders_{M}.txt', 'w') as f:
+    with open(f'{output_dir}/orders_{M}.txt', 'w') as f:
+        M = int(M / 128)
         # 遍历 t1 从 2^1 到 2^7
         for i in tqdm(range(0, 6), desc="Processing t1 values and generating orders"):
             t1 = 2 ** i
@@ -244,6 +251,6 @@ def main(M):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate orders for given M and N')
     parser.add_argument('--M', type=int, required=True, help='Value of M')
+    parser.add_argument('--output_dir', type=str, required=True, help='Output directory for result files')
     args = parser.parse_args()
-    real_block_M = args.M/128 # 注意这里强行指定了block维度是128！！！以后可能需要修改！！
-    main(args.M)
+    main(args.M, args.output_dir) # 这里强制假定block尺寸为128，以后可能需要更改！
