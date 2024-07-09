@@ -1030,8 +1030,8 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   //     dim3(0, 0, 1), dim3(1, 0, 1), dim3(0, 1, 1), dim3(1, 1, 1)
   // };  // 嵌套Z字形
   dim3 exec_seq[4] = {
-    dim3(0, 0, 0), dim3(0, 1, 0),
-    dim3(0, 0, 1), dim3(0, 1, 1)
+    dim3(0, 0, 0), dim3(1, 0, 0),
+    dim3(0, 0, 1), dim3(1, 0, 1)
   };  // 嵌套Z字形
   int array_size = 4;
   dim3* d_exec_seq;

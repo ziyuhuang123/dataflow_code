@@ -60,7 +60,7 @@ struct BaseParams {
   // 定义一个接受这些参数的构造函数
   BaseParams(int block_range_down = 0, int block_range_up = 0, int length = 0, int current_stage = 0)
     : block_range_down(block_range_down), block_range_up(block_range_up), length(length), current_stage(current_stage) {}
-
+// 这些暂时用不到了，有时间可以删掉。
 };
 
 template <
