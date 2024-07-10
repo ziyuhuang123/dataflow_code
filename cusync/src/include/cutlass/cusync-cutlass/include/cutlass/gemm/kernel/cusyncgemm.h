@@ -225,8 +225,8 @@ struct CuSyncGemm {
   void operator()(Params<CustageType> &params, SharedStorage &shared_storage, dim3 exec_seq) {
   // void operator()(Params<CustageType> &params, SharedStorage &shared_storage) {
     CustageType& stage = params.custage;
-    dim3 new_block_idx = stage.tile(&shared_storage.tile_idx, exec_seq);
-    
+    // dim3 new_block_idx = stage.tile(&shared_storage.tile_idx, exec_seq);
+    dim3 new_block_idx = stage.tile(&shared_storage.tile_idx);
     uint block_idx_y = new_block_idx.y;
     uint block_idx_x = new_block_idx.x;
     
@@ -236,7 +236,9 @@ struct CuSyncGemm {
     // Compute threadblock location
     cutlass::gemm::GemmCoord threadblock_tile_offset =
         threadblock_swizzle.get_tile_offset(params.swizzle_log_tile, block_idx_x, block_idx_y, block_idx_z);
+    // cutlass::gemm::GemmCoord threadblock_tile_offset = GemmCoord{exec_seq.x, exec_seq.y, exec_seq.z};
 
+    
     // We do not need this anymore 
     // Early exit if CTA is out of range
     // if (params.grid_tiled_shape.m() <= threadblock_tile_offset.m() ||
@@ -322,6 +324,7 @@ struct CuSyncGemm {
 
     threadblock_tile_offset =
         threadblock_swizzle.get_tile_offset(params.swizzle_log_tile, block_idx_x, block_idx_y, block_idx_z);
+    // threadblock_tile_offset = GemmCoord{exec_seq.x, exec_seq.y, exec_seq.z};
 
     //assume identity swizzle
     MatrixCoord threadblock_offset(

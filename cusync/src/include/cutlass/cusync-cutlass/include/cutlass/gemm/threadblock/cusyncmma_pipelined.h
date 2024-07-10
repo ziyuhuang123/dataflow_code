@@ -519,8 +519,10 @@ public:
           tb_frag_B.clear();
           iterator_B.load(tb_frag_B);
           ++iterator_B;
-
           if (custage.isConsumer()) {
+            if(threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0){
+              printf("pipelined enter line 524\n");
+            }
             dim3 tile = {(uint)tb_offset_A.row(), startK, 0};
             custage.wait(tile, 0, true);
           }
@@ -531,6 +533,9 @@ public:
           ++iterator_A;
         #else
           if (custage.isConsumer()) {
+            if(threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0){
+              printf("pipelined enter line 537\n");
+            }
             dim3 tile = {(uint)tb_offset_A.row(), startK, 0};
             custage.wait(tile, 0, true);
           }
@@ -584,6 +589,9 @@ public:
     tb_frag_A.clear();
     uint startK = tb_offset_A.column();//(total_gemm_k_iterations - gemm_k_iterations)*Shape::kK;
     if (custage.isConsumer()) {
+      if(threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0){
+        printf("pipelined enter line 593\n");
+      }
       dim3 tile = {(uint)tb_offset_A.row(), startK, 1};
       custage.wait(tile, 0, true);
     }
@@ -596,6 +604,9 @@ public:
     #else
     uint startK = tb_offset_A.column();//(total_gemm_k_iterations - gemm_k_iterations)*Shape::kK;
     if (custage.isConsumer()) {
+      if(threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0){
+        printf("pipelined enter line 608\n");
+      }
       dim3 tile = {(uint)tb_offset_A.row(), startK, 1};
       custage.wait(tile, 0, true);
     }

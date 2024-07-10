@@ -986,6 +986,9 @@ public:
         if (gemm_k_iterations > 0) {
           uint startK = tb_offset_A.column() + (total_gemm_k_iterations - gemm_k_iterations)*Shape::kK;
           if (custage.isConsumer()) {
+            if(threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0){
+              printf("enter line 986\n");
+            }
             dim3 tile = {(uint)tb_offset_A.row(), startK, 0};
             custage.wait(tile, 0, true);
           }
@@ -1033,6 +1036,9 @@ public:
     #else
       uint startK = tb_offset_A.column();//(total_gemm_k_iterations - gemm_k_iterations)*Shape::kK;
       if (custage.isConsumer()) {
+        if(threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0){
+          printf("enter line 1040\n");
+        }
         dim3 tile = {(uint)tb_offset_A.row(), startK, 1};
         custage.wait(tile, 0, true);
       }
@@ -1076,6 +1082,9 @@ public:
       if (stage == 0) {
         uint startK = tb_offset_A.column();
         if (custage.isConsumer()) {
+          if(threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0){
+            printf("enter line 1086\n");
+          }
           dim3 tile = {(uint)tb_offset_A.row(), startK, 0};
           custage.wait(tile, 0, true);
         }

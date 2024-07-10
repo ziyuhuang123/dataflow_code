@@ -52,11 +52,11 @@ const uint Opts =
 
 #include "cutlass/cusync-cutlass/include/cutlass/gemm/kernel/default_cusyncgemm.h"
 #include "cutlass/cusync-cutlass/include/cutlass/gemm/kernel/cusyncgemm.h"
-#include "/home/zyhuang/temp_can/dataflow_code/cusync/src/include/cutlass/nvidia-cutlass/include/cutlass/gemm/device/default_gemm_configuration.h"
-#include "/home/zyhuang/temp_can/dataflow_code/cusync/src/include/cutlass/nvidia-cutlass/include/cutlass/arch/mma.h"
-#include "/home/zyhuang/temp_can/dataflow_code/cusync/src/include/cutlass/nvidia-cutlass/include/cutlass/arch/arch.h"
-#include "/home/zyhuang/temp_can/dataflow_code/cusync/src/include/cutlass/nvidia-cutlass/include/cutlass/gemm/gemm.h"
-#include "/home/zyhuang/temp_can/dataflow_code/cusync/src/include/cutlass/nvidia-cutlass/include/cutlass/layout/permute.h"
+#include "cutlass/nvidia-cutlass/include/cutlass/gemm/device/default_gemm_configuration.h"
+#include "cutlass/nvidia-cutlass/include/cutlass/arch/mma.h"
+#include "cutlass/nvidia-cutlass/include/cutlass/arch/arch.h"
+#include "cutlass/nvidia-cutlass/include/cutlass/gemm/gemm.h"
+#include "cutlass/nvidia-cutlass/include/cutlass/layout/permute.h"
 
 #ifndef EVAL_TILE_SIZES
 //Tile sizes of all GeMMs
@@ -311,8 +311,8 @@ struct MLPParameters {
     model = model_;
 
     if (model == "gpt3") {
-      gemm_size1 = cutlass::gemm::GemmCoord(batch, 256, 256);
-      gemm_size2 = cutlass::gemm::GemmCoord(batch, 256, 256);
+      gemm_size1 = cutlass::gemm::GemmCoord(batch, 512, 256);
+      gemm_size2 = cutlass::gemm::GemmCoord(batch, 512, 256);
       // gemm_size1 = cutlass::gemm::GemmCoord(batch, 14336, 4096);
       // gemm_size2 = cutlass::gemm::GemmCoord(batch, 4096, 14336);
     } else if (model=="llama") {
@@ -348,19 +348,17 @@ struct MLPParameters {
   void initIns() {  
     srand(12345);  // 设置随机种子为固定值，确保每次运行结果相同
     if (checkResults) {
-      // ElementOutput values[5] = {ElementOutput(0.05), ElementOutput(0.06),
-      //                            ElementOutput(0.01), ElementOutput(0.06),
-      //                            ElementOutput(0.04)}; // 要让gemm2跑起来，这里必须是1e-2的级别。。。在1e-1就会溢出，得到inf。
-      // memset_random(x.host_data(), 5, values, x.size());
-      // memset_random(w1.host_data(), 5, values, w1.size());
-      // memset_random(w2.host_data(), 5, values, w1.size());
+      ElementOutput values[5] = {ElementOutput(0.05), ElementOutput(0.06),
+                                 ElementOutput(0.01), ElementOutput(0.06),
+                                 ElementOutput(0.04)}; // 要让gemm2跑起来，这里必须是1e-2的级别。。。在1e-1就会溢出，得到inf。
+      memset_random(x.host_data(), 5, values, x.size());
+      memset_random(w1.host_data(), 5, values, w1.size());
+      memset_random(w2.host_data(), 5, values, w1.size());
 
-      // memset_random(x.host_data(), 2, values, x.size());
-      // cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(1));
 
-      cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(0.1));
-      cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.1));
-      cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.1));
+      // cutlass::reference::host::TensorFill(x.host_view(), ElementOutput(0.1));
+      // cutlass::reference::host::TensorFill(w1.host_view(), ElementOutput(0.1));
+      // cutlass::reference::host::TensorFill(w2.host_view(), ElementOutput(0.1));
 
       if (model == "llama") {
         memset_random2(vw1.host_data(), ElementOutput(0.01), ElementOutput(0.2), vw1.size());
@@ -478,8 +476,8 @@ cudaError_t checkMLPResults(MLPParameters& mlpParams) {
                         mlpParams.xw1.size() * sizeof(ElementOutput), 
                         cudaMemcpyDeviceToHost));
   printf("Checking first GeMM\n");
-  bool eq = equals(mlpParams.ref_xw1.size(), mlpParams.ref_xw1.host_data(), hostC, 1e-1f);
-  printf("cutlass-Expected first element: %f, My Received first element: %f\n", static_cast<float>(mlpParams.ref_xw1.host_data()[0]), static_cast<float>(hostC[0]));
+  bool eq = equals(mlpParams.ref_xw1.size(), mlpParams.ref_xw1.host_data(), hostC, 1);
+  printf("GEMM0-cutlass-Expected first element: %f, My Received first element: %f\n", static_cast<float>(mlpParams.ref_xw1.host_data()[0]), static_cast<float>(hostC[0]));
   if (eq == false) {
     printf("First GeMM not correct\n");
     printf("Expected first element: %f, Received first element: %f\n",
@@ -498,8 +496,8 @@ cudaError_t checkMLPResults(MLPParameters& mlpParams) {
                         cudaMemcpyDeviceToHost));
   //For LLaMa not checking XV
   printf("Checking second GeMM\n");
-  eq = equals(mlpParams.ref_xw12.size(), mlpParams.ref_xw12.host_data(), hostE, 1e-1f);
-  printf("cutlass-Expected first element: %f, My-Received first element: %f\n", static_cast<float>(mlpParams.ref_xw12.host_data()[0]), static_cast<float>(hostE[0]));
+  eq = equals(mlpParams.ref_xw12.size(), mlpParams.ref_xw12.host_data(), hostE, 1);
+  printf("GEMM1-cutlass-Expected first element: %f, My-Received first element: %f\n", static_cast<float>(mlpParams.ref_xw12.host_data()[0]), static_cast<float>(hostE[0]));
   if (eq == false) {
     printf("Second GeMM not correct \n");
     // return cudaErrorUnknown;
@@ -803,19 +801,26 @@ void AllKernel(typename Operator::Params<ConsCuStage> cons_params, typename Oper
     printf("enter AllKernel\n");
   }
   dim3 this_block_exec = exec_array[blockIdx.x]; // 注意我们只发射一维网格！但是问题可以是二维的。
-  if (this_block_exec.z==1) {
-      if(threadIdx.x==0&&threadIdx.y==0){
-        printf("cons-blockIdx.x: %d, blockIdx.y: %d, blockIdx.z: %d, this_block_exec=(%d, %d, %d)\n", blockIdx.x, blockIdx.y, blockIdx.z, this_block_exec.x, this_block_exec.y, this_block_exec.z);
-      }
-      GEMMdeviceFunction_cons<Operator>(cons_params, this_block_exec);
-  } else if (this_block_exec.z==0) {
-      if(threadIdx.x==0&&threadIdx.y==0){
-        printf("prod-blockIdx.x: %d, blockIdx.y: %d, blockIdx.z: %d, this_block_exec=(%d, %d, %d)\n", blockIdx.x, blockIdx.y, blockIdx.z, this_block_exec.x, this_block_exec.y, this_block_exec.z);
-      }
-      GEMMdeviceFunction_prod<Operator>(prod_params, this_block_exec);
-  } else {
-      printf("Error: out of block range\n");
+
+  if(blockIdx.x>=0 && blockIdx.x<4){
+    GEMMdeviceFunction_prod<Operator>(prod_params, this_block_exec);
   }
+  else{
+    GEMMdeviceFunction_cons<Operator>(cons_params, this_block_exec);
+  }
+  // if (this_block_exec.z==1) {
+  //     if(threadIdx.x==0&&threadIdx.y==0){
+  //       printf("cons-blockIdx.x: %d, blockIdx.y: %d, blockIdx.z: %d, this_block_exec=(%d, %d, %d)\n", blockIdx.x, blockIdx.y, blockIdx.z, this_block_exec.x, this_block_exec.y, this_block_exec.z);
+  //     }
+  //     GEMMdeviceFunction_cons<Operator>(cons_params, this_block_exec);
+  // } else if (this_block_exec.z==0) {
+  //     if(threadIdx.x==0&&threadIdx.y==0){
+  //       printf("prod-blockIdx.x: %d, blockIdx.y: %d, blockIdx.z: %d, this_block_exec=(%d, %d, %d)\n", blockIdx.x, blockIdx.y, blockIdx.z, this_block_exec.x, this_block_exec.y, this_block_exec.z);
+  //     }
+  //     GEMMdeviceFunction_prod<Operator>(prod_params, this_block_exec);
+  // } else {
+  //     printf("Error: out of block range\n");
+  // }
 
   // if(blockIdx.x>=prod_params.block_range_down && blockIdx.x<prod_params.block_range_up){
   //   GEMMdeviceFunction_prod<Operator>(prod_params);
@@ -1029,11 +1034,19 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   //     dim3(0, 0, 0), dim3(1, 0, 0), dim3(0, 1, 0), dim3(1, 1, 0),
   //     dim3(0, 0, 1), dim3(1, 0, 1), dim3(0, 1, 1), dim3(1, 1, 1)
   // };  // 嵌套Z字形
-  dim3 exec_seq[4] = {
+  // dim3 exec_seq[8] = {
+  //   dim3(0, 0, 0), dim3(0, 1, 0),
+  //   dim3(0, 2, 0), dim3(0, 3, 0),
+  //   dim3(0, 4, 1), dim3(0, 5, 1),
+  //   dim3(0, 6, 1), dim3(0, 7, 1)
+  // };
+  dim3 exec_seq[8] = {
     dim3(0, 0, 0), dim3(1, 0, 0),
-    dim3(0, 0, 1), dim3(1, 0, 1)
-  };  // 嵌套Z字形
-  int array_size = 4;
+    dim3(2, 0, 0), dim3(3, 0, 0),
+    dim3(4, 0, 1), dim3(5, 0, 1),
+    dim3(6, 0, 1), dim3(7, 0, 1)
+  };
+  int array_size = 8;
   dim3* d_exec_seq;
   cudaMalloc(&d_exec_seq, sizeof(dim3) * array_size);
 
@@ -1265,6 +1278,14 @@ int run(int argc, char* argv[]) {
   //Run cusync mlp
   if (policy == "cusync") {
   if (mlpParams.isGPT3()) {
+
+    dim3 gridDim_1 = CuSyncGeMMSwizzle().get_grid_shape(gridDim1);
+
+    // 打印 .x, .y, .z 的值
+    printf("gridDim1.x: %u\n", gridDim1.m());
+    printf("gridDim1.y: %u\n", gridDim1.n());
+    printf("gridDim1.z: %u\n", gridDim1.k());
+
     ProdCuStage prod(CuSyncGeMMSwizzle().get_grid_shape(gridDim1), {1,1,1}, NoSync(), sync);
     ConsCuStage cons(CuSyncGeMMSwizzle().get_grid_shape(gridDim2), {1,1,1}, sync, NoSync());
 
@@ -1272,25 +1293,30 @@ int run(int argc, char* argv[]) {
     
     double overlapTime = 0;
 
-    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, 1, order_line, filePath);
+    // result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, 1, order_line, filePath);
     
 
     CUDA_CHECK(cudaDeviceSynchronize());
 
+    // if (doChecking) {
+    //   result = checkMLPResults(mlpParams);
+    //   if (result != cudaSuccess) {
+    //     return 1;
+    //   }
+    // }
+
+    // result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, warmup, order_line, filePath);
+    
+    CUDA_CHECK(cudaDeviceSynchronize());
+    printf("START-OVERLAPPED:\n");
+    
+    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, epochs, order_line, filePath);
     if (doChecking) {
       result = checkMLPResults(mlpParams);
       if (result != cudaSuccess) {
         return 1;
       }
     }
-
-    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, warmup, order_line, filePath);
-    
-    CUDA_CHECK(cudaDeviceSynchronize());
-    printf("START-OVERLAPPED:\n");
-    
-    result = runCuSyncGPT3(split_k1, split_k2, mlpParams, prod, cons, producer_stream, consumer_stream, overlapTime, epochs, order_line, filePath);
-    
     CUDA_CHECK(result);
     printf("END-OVERLAPPED:\n");
     

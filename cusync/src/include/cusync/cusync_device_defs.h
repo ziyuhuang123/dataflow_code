@@ -38,6 +38,7 @@ namespace cusync {
       uint32_t w = inputPolicy_.waitValue(tile, prodGrid_);
       uint32_t idx = inputPolicy_.tileIndex(tile, prodGrid_);
       auto v = globalLoad(&tileStatusRead_[idx]);
+      printf("w=%d, v=%d, iter=%d\n", w, v, iter);
       while(v < iter * w) {
         v = globalVolatileLoad(&tileStatusRead_[idx]);
       }
@@ -58,9 +59,11 @@ namespace cusync {
     if (threadIdx.x == postThread && threadIdx.y == 0 && threadIdx.z == 0) {
       __threadfence_system();
       uint32_t idx = outputPolicy_.tileIndex(tile, grid_);
+      printf("idx: %d, tile=(%d, %d, %d), block=(%d,%d, %d)\n", idx, tile.x, tile.y, tile.z, blockIdx.x, blockIdx.y, blockIdx.z);
       if (!getNoAtomicAdd()) {
         atomicAdd((int*)&tileStatusWrite_[idx],
                   outputPolicy_.postValue(tile, grid_));
+        printf("tileStatusWrite_[%d]: %d\n", idx, tileStatusWrite_[idx]);
       } else {
         uint32_t val = outputPolicy_.postValue(tile, grid_) * iter;
         asm volatile ("st.global.release.gpu.u32 [%0], {%1};" :: "l"((int*)&tileStatusWrite_[idx]), "r"(val));

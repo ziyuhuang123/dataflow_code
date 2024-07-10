@@ -1,4 +1,4 @@
-NVCC=/usr/local/cuda-11.7/bin/nvcc -std=c++17
+NVCC=/usr/local/cuda-12.5/bin/nvcc -std=c++17
 ROOT=../../../
 CUSYNC=$(ROOT)/src/include
 CUSYNC_SRC=$(ROOT)/src/
