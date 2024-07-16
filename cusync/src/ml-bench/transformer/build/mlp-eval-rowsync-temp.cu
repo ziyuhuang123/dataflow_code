@@ -32,11 +32,11 @@
 #include<cusync/cusync.h>
 
 #include "cutlass/cusync-cutlass/include/cutlass/gemm/kernel/default_cusyncgemm.h"
-#include "/home/zyhuang/temp_can/dataflow_code/cusync/src/include/cutlass/nvidia-cutlass/include/cutlass/gemm/device/default_gemm_configuration.h"
-#include "/home/zyhuang/temp_can/dataflow_code/cusync/src/include/cutlass/nvidia-cutlass/include/cutlass/arch/mma.h"
-#include "/home/zyhuang/temp_can/dataflow_code/cusync/src/include/cutlass/nvidia-cutlass/include/cutlass/arch/arch.h"
-#include "/home/zyhuang/temp_can/dataflow_code/cusync/src/include/cutlass/nvidia-cutlass/include/cutlass/gemm/gemm.h"
-#include "/home/zyhuang/temp_can/dataflow_code/cusync/src/include/cutlass/nvidia-cutlass/include/cutlass/layout/permute.h"
+#include "cutlass/nvidia-cutlass/include/cutlass/gemm/device/default_gemm_configuration.h"
+#include "cutlass/nvidia-cutlass/include/cutlass/arch/mma.h"
+#include "cutlass/nvidia-cutlass/include/cutlass/arch/arch.h"
+#include "cutlass/nvidia-cutlass/include/cutlass/gemm/gemm.h"
+#include "cutlass/nvidia-cutlass/include/cutlass/layout/permute.h"
 
 
 using namespace cusync;
