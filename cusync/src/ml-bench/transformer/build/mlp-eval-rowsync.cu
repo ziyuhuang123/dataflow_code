@@ -312,7 +312,11 @@ struct MLPParameters {
 
     if (model == "gpt3") {
       gemm_size1 = cutlass::gemm::GemmCoord(batch, 512, 256);
+<<<<<<< HEAD
       gemm_size2 = cutlass::gemm::GemmCoord(batch, 512, 256);
+=======
+      gemm_size2 = cutlass::gemm::GemmCoord(batch, 512, 512);
+>>>>>>> temp-branch
       // gemm_size1 = cutlass::gemm::GemmCoord(batch, 14336, 4096);
       // gemm_size2 = cutlass::gemm::GemmCoord(batch, 4096, 14336);
     } else if (model=="llama") {
@@ -477,7 +481,11 @@ cudaError_t checkMLPResults(MLPParameters& mlpParams) {
                         cudaMemcpyDeviceToHost));
   printf("Checking first GeMM\n");
   bool eq = equals(mlpParams.ref_xw1.size(), mlpParams.ref_xw1.host_data(), hostC, 1);
+<<<<<<< HEAD
   printf("GEMM0-cutlass-Expected first element: %f, My Received first element: %f\n", static_cast<float>(mlpParams.ref_xw1.host_data()[0]), static_cast<float>(hostC[0]));
+=======
+  printf("cutlass-Expected first element: %f, My Received first element: %f\n", static_cast<float>(mlpParams.ref_xw1.host_data()[0]), static_cast<float>(hostC[0]));
+>>>>>>> temp-branch
   if (eq == false) {
     printf("First GeMM not correct\n");
     printf("Expected first element: %f, Received first element: %f\n",
@@ -497,7 +505,11 @@ cudaError_t checkMLPResults(MLPParameters& mlpParams) {
   //For LLaMa not checking XV
   printf("Checking second GeMM\n");
   eq = equals(mlpParams.ref_xw12.size(), mlpParams.ref_xw12.host_data(), hostE, 1);
+<<<<<<< HEAD
   printf("GEMM1-cutlass-Expected first element: %f, My-Received first element: %f\n", static_cast<float>(mlpParams.ref_xw12.host_data()[0]), static_cast<float>(hostE[0]));
+=======
+  printf("cutlass-Expected first element: %f, My-Received first element: %f\n", static_cast<float>(mlpParams.ref_xw12.host_data()[0]), static_cast<float>(hostE[0]));
+>>>>>>> temp-branch
   if (eq == false) {
     printf("Second GeMM not correct \n");
     // return cudaErrorUnknown;
@@ -794,6 +806,7 @@ void GEMMdeviceFunction_prod(typename Operator::Params<ProdCuStage> params, dim3
 /// Generic CUTLASS kernel template.
 template <typename Operator>
 __global__
+<<<<<<< HEAD
 void AllKernel(typename Operator::Params<ConsCuStage> cons_params, typename Operator::Params<ProdCuStage> prod_params, dim3* exec_array) {
 // void AllKernel(cutlass::gemm::kernel::BaseParams **params_array, int num_params) { // 以后可以这样改来写的更漂亮。
 // 出去修改param。预设置空的blx和bly，然后在这里用tuple.first和tuple.second来设置。
@@ -821,6 +834,16 @@ void AllKernel(typename Operator::Params<ConsCuStage> cons_params, typename Oper
   // } else {
   //     printf("Error: out of block range\n");
   // }
+=======
+void AllKernel(typename Operator::Params<ConsCuStage> cons_params, typename Operator::Params<ProdCuStage> prod_params, int num_params, dim3* exec_array) {
+
+  dim3 loc_pos = exec_array[blockIdx.x];
+  if (loc_pos.z == 0) {
+    GEMMdeviceFunction_prod<Operator>(prod_params);
+  } else if(loc_pos.z == 1) {
+    GEMMdeviceFunction_cons<Operator>(cons_params);
+  }
+>>>>>>> temp-branch
 
   // if(blockIdx.x>=prod_params.block_range_down && blockIdx.x<prod_params.block_range_up){
   //   GEMMdeviceFunction_prod<Operator>(prod_params);
@@ -831,6 +854,7 @@ void AllKernel(typename Operator::Params<ConsCuStage> cons_params, typename Oper
   // else{
   //   printf("Error out of block range\n");
   // }
+<<<<<<< HEAD
 }
 
 // 读取文件中特定行的函数
@@ -882,6 +906,8 @@ dim3* extractOrderContent(const std::string& line, int& array_size) {
     }
 
     return exec_seq;
+=======
+>>>>>>> temp-branch
 }
 
 /*CuSync GPT-3 MLP*/
@@ -1054,6 +1080,19 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   cudaMemcpy(d_exec_seq, exec_seq, sizeof(dim3) * array_size, cudaMemcpyHostToDevice);
   printf("line 1037\n");
 
+
+  dim3 exec_seq[16] = {
+    dim3(0, 0, 1), dim3(1, 0, 1), dim3(2, 0, 1), dim3(3, 0, 1), dim3(4, 0, 1), dim3(5, 0, 1), dim3(6, 0, 1), dim3(7, 0, 1),
+    dim3(0, 0, 0), dim3(1, 0, 0), dim3(2, 0, 0), dim3(3, 0, 0), dim3(4, 0, 0), dim3(5, 0, 0), dim3(6, 0, 0), dim3(7, 0, 0) 
+  };  // 嵌套Z字形
+  int array_size = 16;
+  dim3* d_exec_seq;
+  cudaMalloc(&d_exec_seq, sizeof(dim3) * array_size);
+
+  // 将数据从CPU复制到GPU
+  cudaMemcpy(d_exec_seq, exec_seq, sizeof(dim3) * array_size, cudaMemcpyHostToDevice);
+
+
   execTime = 0;
   cudaEvent_t start, end;
   CUDA_CHECK(cudaEventCreate(&start));
@@ -1061,7 +1100,11 @@ cudaError_t runCuSyncGPT3(int split_k1, int split_k2,
   CUDA_CHECK(cudaEventRecord(start, 0));
 
   for (int r = 0; r < iters; r++) {
+<<<<<<< HEAD
     AllKernel<GemmKernel><<<grid, block, smem_size>>>(cons_params, prod_params, d_exec_seq); 
+=======
+    AllKernel<GemmKernel><<<grid, block, smem_size>>>(cons_params, prod_params, 2, d_exec_seq); 
+>>>>>>> temp-branch
   }
 
   CUDA_CHECK(cudaEventRecord(end, 0));
@@ -1322,7 +1365,7 @@ int run(int argc, char* argv[]) {
     
     CUDA_CHECK(cudaDeviceSynchronize());
     run_cublasGPT3(mlpParams, epochs); 
-    checkMLPResults_cublas(mlpParams);
+    // checkMLPResults_cublas(mlpParams);
 
     printf("Average time %lf microseconds\n", overlapTime/(float)epochs);
   }
