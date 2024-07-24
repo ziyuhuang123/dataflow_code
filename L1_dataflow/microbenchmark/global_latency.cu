@@ -43,7 +43,7 @@ __global__ void mem_lat(uint32_t *startClk, uint32_t *stopClk, uint64_t *posArra
 		posArray[i] = (uint64_t)(posArray + i + THREADS_NUM);
 		
 	if (uid < THREADS_NUM)
-	{ // only THREADS_NUM has to be active here
+	{ // only THREADS_NUM has to be active here (虽然启动了很多线程和block，但是那些只是用来初始化posArray，并不会真的都去读取数据。)
 
 		// initialize the tail to reference to the head of the array (because i < (ARRAY_SIZE - THREADS_NUM), so the tail(last THREADS_NUM threads) is un-initialized)
 		posArray[ARRAY_SIZE - (THREADS_NUM - tid)] = (uint64_t)posArray + tid;
