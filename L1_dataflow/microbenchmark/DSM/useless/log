@@ -1,0 +1,40 @@
+Compiling DSM benchmark with BS=64 and ILP=1
+dsm_sm2sm_thrpt() time (average) : 0.00921 sec
+Compiling DSM benchmark with BS=64 and ILP=2
+dsm_sm2sm_thrpt() time (average) : 0.01005 sec
+Compiling DSM benchmark with BS=64 and ILP=4
+dsm_sm2sm_thrpt() time (average) : 0.01664 sec
+Compiling DSM benchmark with BS=64 and ILP=8
+dsm_sm2sm_thrpt() time (average) : 0.03289 sec
+Compiling DSM benchmark with BS=128 and ILP=1
+dsm_sm2sm_thrpt() time (average) : 0.01015 sec
+Compiling DSM benchmark with BS=128 and ILP=2
+dsm_sm2sm_thrpt() time (average) : 0.01617 sec
+Compiling DSM benchmark with BS=128 and ILP=4
+dsm_sm2sm_thrpt() time (average) : 0.03200 sec
+Compiling DSM benchmark with BS=128 and ILP=8
+dsm_sm2sm_thrpt() time (average) : 0.06244 sec
+Compiling DSM benchmark with BS=256 and ILP=1
+dsm_sm2sm_thrpt() time (average) : 0.01639 sec
+Compiling DSM benchmark with BS=256 and ILP=2
+dsm_sm2sm_thrpt() time (average) : 0.03209 sec
+Compiling DSM benchmark with BS=256 and ILP=4
+dsm_sm2sm_thrpt() time (average) : 0.06326 sec
+Compiling DSM benchmark with BS=256 and ILP=8
+dsm_sm2sm_thrpt() time (average) : 0.12540 sec
+Compiling DSM benchmark with BS=512 and ILP=1
+dsm_sm2sm_thrpt() time (average) : 0.03264 sec
+Compiling DSM benchmark with BS=512 and ILP=2
+dsm_sm2sm_thrpt() time (average) : 0.06450 sec
+Compiling DSM benchmark with BS=512 and ILP=4
+dsm_sm2sm_thrpt() time (average) : 0.12612 sec
+Compiling DSM benchmark with BS=512 and ILP=8
+dsm_sm2sm_thrpt() time (average) : 0.25063 sec
+Compiling DSM benchmark with BS=1024 and ILP=1
+dsm_sm2sm_thrpt() time (average) : 0.08090 sec
+Compiling DSM benchmark with BS=1024 and ILP=2
+dsm_sm2sm_thrpt() time (average) : 0.13125 sec
+Compiling DSM benchmark with BS=1024 and ILP=4
+dsm_sm2sm_thrpt() time (average) : 0.25351 sec
+Compiling DSM benchmark with BS=1024 and ILP=8
+dsm_sm2sm_thrpt() time (average) : 0.50769 sec
