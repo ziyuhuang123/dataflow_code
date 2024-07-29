@@ -1,0 +1,46 @@
+Number of SMs: 132
+dsm_sm2sm_thrpt() time (average) : 0.00003 sec
+Times per iteration (clock cycles):
+Iteration 0: 1534
+Iteration 1: 1403
+Iteration 2: 1534
+Iteration 3: 1425
+Iteration 4: 1552
+Iteration 5: 1414
+Iteration 6: 1427
+Iteration 7: 1422
+Iteration 8: 1427
+Iteration 9: 1417
+Average time for block0-to-block0: 1461.191500 clock cycles
+Average time for block0-to-block1: 1447.372500 clock cycles
+Average time for block0-to-block2: 1445.711500 clock cycles
+Average time for block0-to-block3: 1453.730000 clock cycles
+Average time for block0-to-block4: 1451.977500 clock cycles
+Average time for block0-to-block5: 1448.819500 clock cycles
+Average time for block0-to-block6: 1447.368500 clock cycles
+Average time for block0-to-block7: 1453.005500 clock cycles
+Average time for block0-to-block8: 1454.919000 clock cycles
+Average time for block0-to-block9: 1447.889500 clock cycles
+Average time for block0-to-block10: 1442.037000 clock cycles
+Average time for block0-to-block11: 1454.253500 clock cycles
+Average time for block0-to-block12: 1451.467500 clock cycles
+Average time for block0-to-block13: 1449.081000 clock cycles
+Average time for block0-to-block14: 1446.976000 clock cycles
+Average time for block0-to-block15: 1452.647500 clock cycles
+Data size: 0.000061 GB
+Throughput for block0-to-block 0: 82.706209 GB/s
+Throughput for block0-to-block 1: 83.495858 GB/s
+Throughput for block0-to-block 2: 83.591788 GB/s
+Throughput for block0-to-block 3: 83.130712 GB/s
+Throughput for block0-to-block 4: 83.231048 GB/s
+Throughput for block0-to-block 5: 83.412467 GB/s
+Throughput for block0-to-block 6: 83.496089 GB/s
+Throughput for block0-to-block 7: 83.172162 GB/s
+Throughput for block0-to-block 8: 83.062775 GB/s
+Throughput for block0-to-block 9: 83.466044 GB/s
+Throughput for block0-to-block 10: 83.804791 GB/s
+Throughput for block0-to-block 11: 83.100786 GB/s
+Throughput for block0-to-block 12: 83.260293 GB/s
+Throughput for block0-to-block 13: 83.397415 GB/s
+Throughput for block0-to-block 14: 83.518738 GB/s
+Throughput for block0-to-block 15: 83.192660 GB/s

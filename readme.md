@@ -280,3 +280,10 @@ cusync 是不是可以总结为没做kernel fusion，是通过信号量/wait ker
 0626
 
 当前128版本能够跑通，多个test也可以。但是64版本好像不行。是不是smem之类的要调整调整什么的。明天再想想看。
+
+0726 
+待做的事情：
+1. 冷老师给的帖子，分析了L2和attention相关的内容：https://zhuanlan.zhihu.com/p/708776013
+2. 杨杰学长提醒我，在Hopper的cluster里，smid和block似乎能对应上，和L2数据流能搞到一起。
+
+但是上述两点都是L2相关的，我暂时优先做L1的。所以以后再看啦
