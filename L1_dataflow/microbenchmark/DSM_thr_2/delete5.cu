@@ -16,8 +16,16 @@ __global__ void dsm_sm2sm_thrpt_kernel(int int_number_per_thread_will_take, int 
 
     for (int j = 0; j < int_number_per_thread_will_take; j++)
         smem[j * THREADS_PER_BLOCK + tid] = tid; // Initialize shared memory histogram to zeros
+    
+
 
     unsigned int dst_block_rank = (clusterBlockRank + 1) % CLUSTER_SIZE;
+
+    if(CLUSTER_SIZE==1){
+        dst_block_rank = 0;
+    }
+
+
     int *dst_smem = cluster.map_shared_rank(smem, dst_block_rank);
     // int *temp = new int[int_number_per_thread_will_take];
     int temp[16] = {0};
