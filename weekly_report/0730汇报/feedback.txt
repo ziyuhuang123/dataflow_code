@@ -1,0 +1,6 @@
+1. 华子说NV的人去面试 说cluster内是cross bar。all to all.  
+2. 华为告诉我，atomicadd的顺序对精度会有影响，加法不具有交换性！（当然目前暂时不管也行）
+3. 冷老师让我再测一测1-2 3 4（空闲）和1-2 3-4的latency和thr的区别。（深入研究cross bar，彼此通信是否会相互影响？） 
+4. 讨论出来如何对DSM算法进行分类。cluster stationary： C E C/E（详情见PPT）
+5. 还是得做lamma3，而不是OPT！好吧，那就多分一个block给FFN0，或者temporal再多算一点FFN0
+6. 也要考虑attention。毕竟重点是长序列，那么attention就非常重要。（我猜可能是因为华为的卡在和H20竞争，而在推理上表现不佳，而训练上表现尚可等原因？）
