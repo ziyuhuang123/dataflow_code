@@ -4,3 +4,46 @@
 4. 讨论出来如何对DSM算法进行分类。cluster stationary： C E C/E（详情见PPT）
 5. 还是得做lamma3，而不是OPT！好吧，那就多分一个block给FFN0，或者temporal再多算一点FFN0
 6. 也要考虑attention。毕竟重点是长序列，那么attention就非常重要。（我猜可能是因为华为的卡在和H20竞争，而在推理上表现不佳，而训练上表现尚可等原因？）
+7. 和徐家乐讨论，发现alpa完成了我之前对stationary的构思。而且是整个模型的完整的，怎么切分，怎么通信的空间的搜索。不过论文里搜出来的性能提升不大。不知道在kernel级别会不会有什么优势。。
+
+
+H100-SXM80G测试结果
+
+--------------latency（cycle）:
+l1 39
+DSM 191
+l2 258
+global 470
+
+---------------每个cluster内SM通信是否会相互干扰？
+设定cluster_size变量，要么，只有SM0->1的通信（one模式），要么其中的一半都通信（two模式），比如0->1, 2->3（当cluster_size=4），或者0->1, 2->3, 4->5, 6->7（当cluster_size=8）测量两种模式下的latency（仅传输一个值）和throughput（传输128*128的int值）：
+
+///////////////////////
+当cluster_size=4:
+one-latency:208cycle
+two-latency:
+208和201cycle
+
+one-throughput: 0.90731 TB/s-0.00022 sec
+two-throughput: 1.81605 TB/s-0.00022 sec
+（测throughput是不是没有意义？）
+
+
+/////////////////////////
+当cluster_size=8:
+one-latency:208cycle
+two-latency:
+198, 201, 203, 208cycle
+
+one-throughput: 0.44118 TB/s-0.00022 sec
+two-throughput: 0.88669 TB/s-0.00022 sec
+（测throughput是不是没有意义？）
+
+
+/////////////////////////
+当cluster_size=16:
+one-latency:208cycle
+two-latency:
+181, 187, 191, 191, 197, 201, 203, 207cycle
+
+结论：1. DSM比L2快，但是快的有限。2. DSM内的cross bar对latency造成轻微的影响，对throughput不造成影响。
