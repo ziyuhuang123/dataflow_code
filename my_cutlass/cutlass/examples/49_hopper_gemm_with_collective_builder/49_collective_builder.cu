@@ -321,6 +321,17 @@ struct ExampleRunner {
       cute::conditional_t<UseCustomEVT, CustomEVT, DefaultOperation>
     >::CollectiveOp;
 
+  // using CollectiveEpilogue = typename cutlass::epilogue::collective::CollectiveBuilder<
+  //     cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
+  //     TileShape, ClusterShape,
+  //     cutlass::epilogue::collective::EpilogueTileAuto,
+  //     ElementAccumulator, ElementCompute,
+  //     ElementC, LayoutC, AlignmentC,
+  //     void, LayoutD, AlignmentD,
+  //     EpilogueScheduleType,
+  //     cute::conditional_t<UseCustomEVT, CustomEVT, DefaultOperation>
+  //   >::CollectiveOp;
+
   using CollectiveMainloop = typename cutlass::gemm::collective::CollectiveBuilder<
       cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
       ElementA, LayoutA, AlignmentA,

@@ -624,7 +624,7 @@ public:
 
     // Allocate D registers
     Layout tRS_rD_layout = make_layout(take<0,3>(shape(thread_r2s.partition_S(sD_epi))));
-    Tensor tRS_rD = make_tensor<SmemElementD>(tRS_rD_layout);                                          // (R2S,R2S_M,R2S_N)
+    Tensor tRS_rD = make_tensor<SmemElementD>(tRS_rD_layout); // (R2S,R2S_M,R2S_N)
 
     // Vectorized fragment view
     constexpr int FragmentSize = DispatchPolicy::FragmentSize;
@@ -686,6 +686,16 @@ public:
     auto cst_callbacks = fusion_callbacks.get_consumer_store_callbacks<RefSrc>(cst_args);
     bool is_producer_load_needed = fusion_callbacks.is_producer_load_needed();
     bool is_C_load_needed = is_source_supported && fusion_callbacks.is_C_load_needed();
+
+
+    if(blockIdx.x == 0 && blockIdx.y == 0&&threadIdx.x==383&&threadIdx.y==0) {
+        printf("is_source_supported: %d\n", is_source_supported);
+        printf("fusion_callbacks.is_C_load_needed(): %d\n", fusion_callbacks.is_C_load_needed());
+        printf("is_C_load_needed: %d, th=(%d, %d)\n", is_C_load_needed, threadIdx.x, threadIdx.y);
+        printf("is_destination_supported=%d\n", is_destination_supported);
+    }
+
+
 
     using FragmentVisit = decltype(cst_callbacks.visit(tRS_rAcc_frg(0), 0, 0, 0));
     constexpr bool IsDirectR2S = cute::is_same_v<FragmentVisit, Array<SmemElementD, FragmentSize>>;

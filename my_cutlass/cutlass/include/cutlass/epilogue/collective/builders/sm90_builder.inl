@@ -79,9 +79,9 @@ sm90_get_tma_dispatch_policy() {
   constexpr bool DelayTmaStore = is_void_v<ElementC> && !detail::sm90_is_tma_ptr_array_v<Schedule>;
 
   constexpr int StagesD = cute::min(EpiTiles, 2);
-  constexpr int StagesC = ReuseSmem ? cute::max(cute::min(EpiTiles, 4), StagesD+1)
-                                    : cute::min(EpiTiles, 4);
-
+  // constexpr int StagesC = ReuseSmem ? cute::max(cute::min(EpiTiles, 4), StagesD+1)
+  //                                   : cute::min(EpiTiles, 4);
+  constexpr int StagesC = 0;
   return cute::conditional_t<detail::sm90_is_tma_ptr_array_v<Schedule>,
                              Sm90PtrArrayTmaWarpSpecialized<StagesC, StagesD, FragmentSize, ReuseSmem, DelayTmaStore>,
                              Sm90TmaWarpSpecialized<StagesC, StagesD, FragmentSize, ReuseSmem, DelayTmaStore>>{};

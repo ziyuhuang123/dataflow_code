@@ -639,9 +639,7 @@ public:
 
       // Do we potentially issue tail arrives for TMA stores, if epilogue load is waiting for it
       bool do_store_tail = false;
-      int cons_iter_num=0;
-      while (work_tile_info.is_valid() && cons_iter_num<4) {
-        // cons_iter_num += 1;
+      while (work_tile_info.is_valid()) {
         // Compute m_coord, n_coord, l_coord with the post-tiled m-shape and n-shape
         auto m_coord = idx2crd(work_tile_info.M_idx, shape<2>(gA_mkl));
         auto n_coord = idx2crd(work_tile_info.N_idx, shape<2>(gB_nkl));
