@@ -122,6 +122,22 @@ using CollectiveEpilogue = typename cutlass::epilogue::collective::CollectiveBui
     cutlass::epilogue::collective::EpilogueScheduleAuto
   >::CollectiveOp;
 
+
+
+// using CollectiveEpilogue = typename cutlass::epilogue::collective::CollectiveBuilder<
+//     cutlass::arch::Sm90,
+//     cutlass::arch::OpClassTensorOp,
+//     TileShape,
+//     ClusterShape,
+//     cutlass::epilogue::collective::EpilogueTileAuto,
+//     ElementAccumulator,
+//     ElementAccumulator,
+//     ElementC, LayoutC, AlignmentC,
+//     ElementC, LayoutC, AlignmentC,
+//     cutlass::epilogue::TmaWarpSpecializedCooperative,
+//     cutlass::epilogue::fusion::LinearCombination<ElementC, ElementAccumulator, ElementC, ElementAccumulator, RoundStyle>
+//   >::CollectiveOp;
+
 using CollectiveMainloop = typename cutlass::gemm::collective::CollectiveBuilder<
     ArchTag, OperatorClass,
     ElementA, LayoutA, AlignmentA,

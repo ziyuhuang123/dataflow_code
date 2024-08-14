@@ -131,6 +131,15 @@ public:
       using MainloopTensorStorage = typename CollectiveMainloop::TensorStorage;
       using EpilogueTensorStorage = typename CollectiveEpilogue::TensorStorage;
 
+
+      using CollectiveStorage_inner = typename CollectiveEpilogue::TensorStorage::CollectiveStorage;
+      using FusionStorage_inner = typename CollectiveEpilogue::TensorStorage::FusionStorage;
+
+
+
+
+
+
       EpilogueTensorStorage epilogue;
       MainloopTensorStorage mainloop;
     } tensors;
@@ -174,6 +183,18 @@ public:
 
   // EpilogueTensorStorage size
   static constexpr int EpilogueTensorStorageSize = sizeof(SharedStorage::TensorStorage::EpilogueTensorStorage);
+
+
+
+  // CollectiveStorage_inner size
+  static constexpr int CollectiveStorage_inner_size = sizeof(SharedStorage::TensorStorage::CollectiveStorage_inner);
+  // CollectiveStorage_inner_smemC_size size
+  static constexpr int CollectiveStorage_inner_smemC_size = sizeof(SharedStorage::TensorStorage::CollectiveStorage_inner::smem_C);
+  // CollectiveStorage_inner_smemC_size size
+  static constexpr int CollectiveStorage_inner_smemD_size = sizeof(SharedStorage::TensorStorage::CollectiveStorage_inner::smem_D);
+  // FusionStorage_inner size
+  static constexpr int FusionStorage_inner_size = sizeof(SharedStorage::TensorStorage::FusionStorage_inner);
+
 
 
 
@@ -337,23 +358,27 @@ public:
   void
   operator()(Params const& params, char* smem_buf) {
 
-    // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
-    //     printf("SharedStorageSize=%d\n", SharedStorageSize);
-    //     printf("PipelineStorageSize=%d\n", PipelineStorageSize);
-    //     printf("TensorStorageSize=%d\n", TensorStorageSize);
-    //     printf("MainloopPipelineStorageSize=%d\n", MainloopPipelineStorageSize);
-    //     printf("EpiLoadPipelineStorageSize=%d\n", EpiLoadPipelineStorageSize);
-    //     printf("LoadWarpOrderBarrierSharedStorageSize=%d\n", LoadWarpOrderBarrierSharedStorageSize);
-    //     printf("MainloopTensorStorageSize=%d\n", MainloopTensorStorageSize);
-    //     printf("EpilogueTensorStorageSize=%d\n", EpilogueTensorStorageSize);
-    //     printf("TensorStorageSmemASize=%d\n", TensorStorageSmemASize);
-    //     printf("TensorStorageSmemBSize=%d\n", TensorStorageSmemBSize);
-    //     printf("//////////////////\n");
-    //     printf("TileShape=(%d, %d, %d)\n", TileShape_0, TileShape_1, TileShape_2);
-    //     printf("stages_value=%d\n", stages_value);
-    //     printf("SmemLayoutAtomA=(%d, %d)\n", SmemLayoutAtomA_0, SmemLayoutAtomA_1);
-    //     printf("SmemLayoutA=(%d, %d, %d)\n", SmemLayoutA_0, SmemLayoutA_1, SmemLayoutA_2);
-    // }
+    if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
+        printf("SharedStorageSize=%d\n", SharedStorageSize);
+        printf("PipelineStorageSize=%d\n", PipelineStorageSize);
+        printf("TensorStorageSize=%d\n", TensorStorageSize);
+        printf("MainloopPipelineStorageSize=%d\n", MainloopPipelineStorageSize);
+        printf("EpiLoadPipelineStorageSize=%d\n", EpiLoadPipelineStorageSize);
+        printf("LoadWarpOrderBarrierSharedStorageSize=%d\n", LoadWarpOrderBarrierSharedStorageSize);
+        printf("MainloopTensorStorageSize=%d\n", MainloopTensorStorageSize);
+        printf("EpilogueTensorStorageSize=%d\n", EpilogueTensorStorageSize);
+        printf("TensorStorageSmemASize=%d\n", TensorStorageSmemASize);
+        printf("TensorStorageSmemBSize=%d\n", TensorStorageSmemBSize);
+        printf("CollectiveStorage_inner_size=%d\n", CollectiveStorage_inner_size);
+        printf("FusionStorage_inner_size=%d\n", FusionStorage_inner_size);
+        printf("CollectiveStorage_inner_smemD_size=%d\n", CollectiveStorage_inner_smemD_size);
+        printf("CollectiveStorage_inner_smemC_size=%d\n", CollectiveStorage_inner_smemC_size);
+        printf("//////////////////\n");
+        printf("TileShape=(%d, %d, %d)\n", TileShape_0, TileShape_1, TileShape_2);
+        printf("stages_value=%d\n", stages_value);
+        printf("SmemLayoutAtomA=(%d, %d)\n", SmemLayoutAtomA_0, SmemLayoutAtomA_1);
+        printf("SmemLayoutA=(%d, %d, %d)\n", SmemLayoutA_0, SmemLayoutA_1, SmemLayoutA_2);
+    }
 
     using namespace cute;
     using X = Underscore;
@@ -509,9 +534,7 @@ public:
       // Mainloop Producer Warp
       if (producer_warp_role == ProducerWarpRole::Mainloop) {
         bool do_load_order_arrive = true;
-        bool print_out = true;
-        int iter_num=0;
-        while (work_tile_info.is_valid() && iter_num <4) {
+        while (work_tile_info.is_valid()) {
           // iter_num += 1;
           if (!TileScheduler::valid_warpgroup_in_work_tile(work_tile_info)) {
             // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
@@ -659,6 +682,9 @@ public:
           params.scheduler, work_tile_info, accumulators, NumMmaWarpGroups, consumer_warp_group_idx);
 
         if (TileScheduler::compute_epilogue(work_tile_info, params.scheduler)) {
+          // if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==383&&threadIdx.y==0){
+          //   printf("enter cutlass/include/cutlass/gemm/kernel/sm90_gemm_tma_warpspecialized_cooperative.hpp, th=(%d, %d)\n", threadIdx.x, threadIdx.y);
+          // }
           // Epilogue and write to gD
           auto [epi_load_pipe_consumer_state_next, epi_store_pipe_producer_state_next] =
           collective_epilogue.store(

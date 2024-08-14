@@ -139,6 +139,7 @@ private:
   constexpr static int StagesC = StagesC_;
   constexpr static int StagesD = StagesD_;
   constexpr static bool ReuseSmemC = ReuseSmemC_ and is_destination_supported;
+
   constexpr static bool DelayTmaStore = DelayTmaStore_;
 
   constexpr static bool is_m_major_C = detail::is_m_major<StrideC>();
@@ -151,13 +152,13 @@ private:
       SmemLayoutAtomC{},
       make_shape(size<0>(EpilogueTile{}), size<1>(EpilogueTile{}), Int<StagesC>{}),
       cute::conditional_t<is_m_major_C, Step<_2,_1,_3>, Step<_1,_2,_3>>{} ));
+
   using SmemLayoutD = decltype(tile_to_shape(
       SmemLayoutAtomD{},
       make_shape(size<0>(EpilogueTile{}), size<1>(EpilogueTile{}), Int<ReuseSmemC ? StagesC : StagesD>{}),
       cute::conditional_t<is_m_major_D, Step<_2,_1,_3>, Step<_1,_2,_3>>{} ));
 
-  constexpr static bool support_smem_reuse = is_source_supported && is_destination_supported && StagesD <= StagesC
-                                            && cosize(take<0,2>(SmemLayoutC{})) == cosize(take<0,2>(SmemLayoutD{}));
+  constexpr static bool support_smem_reuse = is_source_supported && is_destination_supported && StagesD <= StagesC && cosize(take<0,2>(SmemLayoutC{})) == cosize(take<0,2>(SmemLayoutD{}));
   static_assert(not (ReuseSmemC && not support_smem_reuse), "Smem reuse requirements not met");
 
   constexpr static size_t SmemAlignmentD = cutlass::detail::alignment_for_swizzle(SmemLayoutD{});
@@ -206,8 +207,7 @@ public:
 
   struct SharedStorage {
     struct TensorStorage {
-      using CollectiveStorage = cute::conditional_t<not is_source_supported, CollectiveStorageWithoutC,
-                                  cute::conditional_t<ReuseSmemC, CollectiveStorageReuseC, CollectiveStorageWithC>>;
+      using CollectiveStorage = cute::conditional_t<not is_source_supported, CollectiveStorageWithoutC, cute::conditional_t<ReuseSmemC, CollectiveStorageReuseC, CollectiveStorageWithC>>;
       CollectiveStorage collective;
 
       using FusionStorage = typename FusionCallbacks::SharedStorage;
@@ -262,6 +262,45 @@ public:
       ProblemShape const& problem_shape,
       Arguments const& args,
       [[maybe_unused]] void* workspace) {
+
+
+
+    printf("ReuseSmemC_: %d\n", static_cast<int>(ReuseSmemC_));
+    printf("is_destination_supported: %d\n", static_cast<int>(is_destination_supported));
+    printf("is_source_supported=%d\n", is_source_supported);
+    printf("support_smem_reuse=%d\n", support_smem_reuse);
+    printf("StagesC: %d\n", StagesC);
+    printf("StagesD: %d\n", StagesD);
+
+    auto SmemLayoutC_dims = take<0,3>(SmemLayoutC{});
+
+    // 打印 SmemLayoutC 的三个维度
+    printf("SmemLayoutC dimensions: (%d, %d, %d)\n",    
+       size<0>(SmemLayoutC_dims),
+       size<1>(SmemLayoutC_dims),
+       size<2>(SmemLayoutC_dims));
+
+    printf("EpilogueTile dimensions: (%llu, %llu)\n",    
+       size<0>(EpilogueTile{}),
+       size<1>(EpilogueTile{}));
+
+    int CollectiveStorageWithC_smem_C_Size = sizeof(CollectiveStorageWithC::smem_C);
+    printf("CollectiveStorageWithC_smem_C_Size: %d\n", CollectiveStorageWithC_smem_C_Size);
+
+    printf("cosize_v<SmemLayoutC>: %d\n", static_cast<int>(cosize_v<SmemLayoutC>));
+
+    printf("Size of SmemElementC: %zu bytes\n", sizeof(SmemElementC));
+
+  // struct CollectiveStorageWithC {
+  //   alignas(SmemAlignmentC) ArrayEngine<SmemElementC, cosize_v<SmemLayoutC>> smem_C;
+  //   alignas(SmemAlignmentD) ArrayEngine<SmemElementD, cosize_v<SmemLayoutD>> smem_D;
+  // };
+  
+
+
+    // printf("ReuseSmemC (for printing): %d\n", static_cast<int>(ReuseSmemC_for_printing));
+
+
     // Optionally append 1s until problem shape is rank-4 in case its is only rank-3 (MNK)
     auto problem_shape_MNKL = append<4>(problem_shape, 1);
     auto [M, N, K, L] = problem_shape_MNKL;
@@ -528,6 +567,10 @@ public:
       int thread_idx,
       TensorStorage& shared_tensors,
       int subtile_idx=-1) {
+
+    // if(blockIdx.x==0&&blockIdx.y==0){
+    //   printf("enter cutlass/include/cutlass/epilogue/collective/sm90_epilogue_tma_warpspecialized.hpp\n");
+    // }
     using namespace cute;
     using ElementAccumulator = typename AccEngine::value_type;
     using ElementCompute_ = typename epilogue::fusion::FusionCallbacksTraits<FusionCallbacks>::ElementCompute;

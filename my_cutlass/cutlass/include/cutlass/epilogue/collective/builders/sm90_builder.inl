@@ -69,9 +69,15 @@ sm90_get_tma_dispatch_policy() {
   constexpr int EpiTiles = size(shape_div(take<0,2>(TileShapeMNK{}), EpilogueTileMN{}));
   constexpr int FragmentSize = size(EpilogueTileMN{}) / (detail::sm90_is_cooperative_v<Schedule> ? 256 : 128);
   // 8b residuals load fast and consume little smem, so the perf cost of waiting on stores to finish outweighs the cost of extra allocation
-  constexpr bool ReuseSmem = (sizeof_bits_v<ElementC> == sizeof_bits_v<ElementD>) && (sizeof_bits_v<ElementD> > 8);
+
+
+  // constexpr bool ReuseSmem = (sizeof_bits_v<ElementC> == sizeof_bits_v<ElementD>) && (sizeof_bits_v<ElementD> > 8);
+  constexpr bool ReuseSmem = false;
+
+
   // TMA store delay performs worse with residual loads and compilicates tensormap updates for Ptr-Array GEMMs
   constexpr bool DelayTmaStore = is_void_v<ElementC> && !detail::sm90_is_tma_ptr_array_v<Schedule>;
+
   constexpr int StagesD = cute::min(EpiTiles, 2);
   constexpr int StagesC = ReuseSmem ? cute::max(cute::min(EpiTiles, 4), StagesD+1)
                                     : cute::min(EpiTiles, 4);
@@ -417,7 +423,7 @@ struct CollectiveBuilder<
     fusion::LinearCombination<ElementD,ElementCompute,ElementC_,ElementCompute,RoundStyle>,
     cute::enable_if_t<cute::is_same_v<Schedule, NoSmemWarpSpecialized> ||
                       cute::is_same_v<Schedule, PtrArrayNoSmemWarpSpecialized> >> {
-
+// struct前面的是模板，不需要传进来。后面的是模板参数，在实例化struct的时候就必须有模板参数来实例化。
   // Passing void C disables source load
   using ElementC = cute::conditional_t<cute::is_void_v<ElementC_>,
       ElementD, ElementC_>; // prevents cute breakages
@@ -446,7 +452,7 @@ struct CollectiveBuilder<
         cutlass::detail::TagToStrideC_t<GmemLayoutTagD>,
         ThreadOp,
         Schedule>>
-    >;
+    >; // 一开始定义的是auto，然后里面确定会使用NoSmemWarpSpecialized，所以这里就会选择DefaultEpilogue（第一个）
 };
 
 // Tma warp-specialized builder
@@ -487,8 +493,11 @@ struct CollectiveBuilder<
 private:
   using ElementD = cute::conditional_t<cute::is_void_v<ElementD_>,
                      fusion::get_element_aux_t<FusionOperation>, ElementD_>;
+  // using EpilogueTile_MN =
+  //   decltype(detail::sm90_compute_tile_shape_or_override<ElementD, EpilogueTileType, Schedule, TileShape_MNK>());
   using EpilogueTile_MN =
-    decltype(detail::sm90_compute_tile_shape_or_override<ElementD, EpilogueTileType, Schedule, TileShape_MNK>());
+    decltype(take<0,2>(TileShape_MNK{})); // 这里之前肯定是有某种原因，默认判断去复用共享内存了。所以只有我希望的128*256的一半。目前暂时先写死成这样，以后有时间去理解一下原先的判断逻辑，再细改.
+
   using DispatchPolicy =
     decltype(detail::sm90_get_tma_dispatch_policy<TileShape_MNK,EpilogueTile_MN,ElementC,ElementD,Schedule>());
 

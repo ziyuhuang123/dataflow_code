@@ -270,6 +270,7 @@ struct ExampleRunner {
   using ElementB = cutlass::half_t;
   using ElementC = cutlass::half_t;
   using ElementD = cutlass::half_t;
+  // using ElementD = void;
   using ElementAccumulator = float;
   using ElementCompute = float;
   using ElementScalar = float;
@@ -298,6 +299,11 @@ struct ExampleRunner {
       >
     >;
 
+
+    using TileShape = Shape<_128,_256,_64>; // Threadblock-level tile size
+    using ClusterShape = Shape<_1, _16, _1>;
+
+
   // A predefined set of fusion operations (implemented with EVT) are supported by the TMA warp-specialized epilogue.
   // Users can select one of these operations by passing one of the tags defined in include/cutlass/epilogue/fusion/operations.hpp
   // to the CollectiveBuilder. This frees the user from having to compute additional parameters such as stage counts and copy atoms/layouts.
@@ -306,7 +312,7 @@ struct ExampleRunner {
 
   using CollectiveEpilogue = typename cutlass::epilogue::collective::CollectiveBuilder<
       cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
-      Shape<_128,_128,_64>, Shape<_1,_1,_1>,
+      TileShape, ClusterShape,
       cutlass::epilogue::collective::EpilogueTileAuto,
       ElementAccumulator, ElementCompute,
       ElementC, LayoutC, AlignmentC,
@@ -320,7 +326,7 @@ struct ExampleRunner {
       ElementA, LayoutA, AlignmentA,
       ElementB, LayoutB, AlignmentB,
       ElementAccumulator,
-      Shape<_128,_128,_64>, Shape<_2,_1,_1>,
+      TileShape, ClusterShape,
       cute::conditional_t<cute::is_same_v<StageCountType, cutlass::gemm::collective::StageCountAuto>,
           cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(sizeof(typename CollectiveEpilogue::SharedStorage))>,
           StageCountType>,
@@ -588,40 +594,45 @@ int main(int argc, char const **args) {
   // stage count. Note that the behavior of the CollectiveBuilder with `Auto` parameters is subject to change
   // -- do not rely on `Auto` if you require a specific scheduling policy.
   // If you opt in to a non-'Auto' schedule, make sure all collectives are built using specific, compatible schedules.
-  ExampleRunner<> auto_schedule_auto_stage_runner;
-  passed = auto_schedule_auto_stage_runner.run(options, hw_info);
-  print_result("Automatically-selected schedule and stage count", passed);
 
-  // One can override the stage count used in the GEMM by replacing cutlass::gemm::collective::StageCountAuto
-  // with the number of stages to use (5 in this case).
-  ExampleRunner<
-    cutlass::gemm::collective::KernelScheduleAuto,
-    cutlass::epilogue::collective::EpilogueScheduleAuto,
-    _5> auto_schedule_5_stage_runner;
 
-  passed = auto_schedule_5_stage_runner.run(options, hw_info);
-  print_result("Automatically-selected schedule with 5 stages", passed);
 
-  // One can also override the scheduling policy to use. In this case, use the KernelTma scheduling
-  // policy, which specifies that the Hopper TMA feature should be used, and we also use an epilogue
-  // that does not use any shared memory.
-  ExampleRunner<cutlass::gemm::KernelTma, cutlass::epilogue::NoSmemWarpSpecialized> tma_schedule_auto_stage_runner;
-  passed = tma_schedule_auto_stage_runner.run(options, hw_info);
-  print_result("TMA schedule with automatically-selected stage count", passed);
 
-  // Here, we override the scheduling policy to use Hopper's TMA feature alongside the warp-specialized
-  // scheduling policy, and an epilogue that does not use any shared memory.
-  ExampleRunner<cutlass::gemm::KernelTmaWarpSpecialized, cutlass::epilogue::NoSmemWarpSpecialized> ws_schedule_auto_stage_runner;
-  passed = ws_schedule_auto_stage_runner.run(options, hw_info);
-  print_result("Warp-specialized TMA schedule with automatically-selected stage count", passed);
 
-  // Here, we override the scheduling policy to use Hopper's TMA feature, alongside the warp-specialized
-  // scheduling policy, TMA-based epilogue, leveraging persistent thread blocks.
-  ExampleRunner<
-    cutlass::gemm::KernelTmaWarpSpecializedPingpong,
-    cutlass::epilogue::TmaWarpSpecialized> ws_pingpong_schedule_auto_stage_runner;
-  passed = ws_pingpong_schedule_auto_stage_runner.run(options, hw_info);
-  print_result("Ping-pong warp-specialized TMA schedule with automatically-selected stage count", passed);
+  // ExampleRunner<> auto_schedule_auto_stage_runner;
+  // passed = auto_schedule_auto_stage_runner.run(options, hw_info);
+  // print_result("Automatically-selected schedule and stage count", passed);
+
+  // // One can override the stage count used in the GEMM by replacing cutlass::gemm::collective::StageCountAuto
+  // // with the number of stages to use (5 in this case).
+  // ExampleRunner<
+  //   cutlass::gemm::collective::KernelScheduleAuto,
+  //   cutlass::epilogue::collective::EpilogueScheduleAuto,
+  //   _5> auto_schedule_5_stage_runner;
+
+  // passed = auto_schedule_5_stage_runner.run(options, hw_info);
+  // print_result("Automatically-selected schedule with 5 stages", passed);
+
+  // // One can also override the scheduling policy to use. In this case, use the KernelTma scheduling
+  // // policy, which specifies that the Hopper TMA feature should be used, and we also use an epilogue
+  // // that does not use any shared memory.
+  // ExampleRunner<cutlass::gemm::KernelTma, cutlass::epilogue::NoSmemWarpSpecialized> tma_schedule_auto_stage_runner;
+  // passed = tma_schedule_auto_stage_runner.run(options, hw_info);
+  // print_result("TMA schedule with automatically-selected stage count", passed);
+
+  // // Here, we override the scheduling policy to use Hopper's TMA feature alongside the warp-specialized
+  // // scheduling policy, and an epilogue that does not use any shared memory.
+  // ExampleRunner<cutlass::gemm::KernelTmaWarpSpecialized, cutlass::epilogue::NoSmemWarpSpecialized> ws_schedule_auto_stage_runner;
+  // passed = ws_schedule_auto_stage_runner.run(options, hw_info);
+  // print_result("Warp-specialized TMA schedule with automatically-selected stage count", passed);
+
+  // // Here, we override the scheduling policy to use Hopper's TMA feature, alongside the warp-specialized
+  // // scheduling policy, TMA-based epilogue, leveraging persistent thread blocks.
+  // ExampleRunner<
+  //   cutlass::gemm::KernelTmaWarpSpecializedPingpong,
+  //   cutlass::epilogue::TmaWarpSpecialized> ws_pingpong_schedule_auto_stage_runner;
+  // passed = ws_pingpong_schedule_auto_stage_runner.run(options, hw_info);
+  // print_result("Ping-pong warp-specialized TMA schedule with automatically-selected stage count", passed);
 
   // Here, we override the scheduling policy to use stream-K problem decomposition atop the cooperative
   // warp-specialized scheduling policy. This kernel continues to leverage persistent thread blocks

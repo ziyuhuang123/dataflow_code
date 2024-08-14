@@ -284,6 +284,9 @@ public:
       TensorStorage& shared_tensors,
       int subtile_index = -1)
   {
+    if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==383){
+      printf("000enter cutlass/include/cutlass/epilogue/collective/detail.hpp\n");
+    }
     constexpr int BLK_M_RANK = cute::rank<0>(cta_tile_mnk);
     auto m_max_coord = unwrap(cute::transform(make_seq<BLK_M_RANK>{}, [&](auto i) {
         return get<0,i>(problem_shape_mnkl) - get<0,i>(cta_tile_mnk) * get<0,i>(cta_coord_mnkl);
@@ -333,6 +336,10 @@ public:
       [[maybe_unused]] TensorMapD const& store_tensormap,
       int subtile_index = -1)
   {
+
+    if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==383){
+      printf("111enter cutlass/include/cutlass/epilogue/collective/detail.hpp\n");
+    }
     constexpr int BLK_M_RANK = cute::rank<0>(tile_shape_MNK);
     auto m_max_coord = unwrap(cute::transform(make_seq<BLK_M_RANK>{}, [&](auto i) {
         return get<0,i>(problem_shape_mnkl) - get<0,i>(tile_shape_MNK) * get<0,i>(tile_coord_mnkl);
