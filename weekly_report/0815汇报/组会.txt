@@ -1,0 +1,4 @@
+MOE：
+1. 只有FFN会有MOE，attention没有！
+2. 不同expert被选择有倾向性，有一些expert倾向于名词，动词，空格等。所以当给定一个token后，后续expert能够有顺序依赖。可以给某些expert分配更多GPU（做data parallel）
+3. 近些年用MOE的模型越来越多，但是llamma3没有用。并且存在收敛性问题。
