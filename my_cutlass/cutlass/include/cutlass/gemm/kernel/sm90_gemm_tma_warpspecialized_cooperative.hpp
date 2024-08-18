@@ -356,6 +356,8 @@ public:
 
   CUTLASS_DEVICE
   void exec_gemm0(Params const& params, char* smem_buf) {
+
+
 // 原先是operator：
   // void   operator()(Params const& params, char* smem_buf) 
 
@@ -740,7 +742,139 @@ public:
 
     // __syncthreads(); // 这里不需要cluster sync。因为每个block自己算完存到SMEM就够了。
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // Mainloop Load pipeline
+    // using MainloopPipeline = typename CollectiveMainloop::MainloopPipeline;
+    typename MainloopPipeline::Params mainloop_pipeline_params1;
+    if (warp_group_role == WarpGroupRole::Producer && producer_warp_role == ProducerWarpRole::Mainloop) {
+      mainloop_pipeline_params1.role = MainloopPipeline::ThreadCategory::Producer;
+    }
+    if (warp_group_role == WarpGroupRole::Consumer0 || warp_group_role == WarpGroupRole::Consumer1) {
+      mainloop_pipeline_params1.role = MainloopPipeline::ThreadCategory::Consumer;
+    }
+    mainloop_pipeline_params1.is_leader = warp_group_thread_idx == 0;
+    mainloop_pipeline_params1.num_consumers = size(TiledMma{});
+    mainloop_pipeline_params1.transaction_bytes = params.mainloop.tma_transaction_bytes;
+    MainloopPipeline mainloop_pipeline1(shared_storage.pipelines.mainloop, mainloop_pipeline_params1, ClusterShape{});
+
+    // Epilogue Load pipeline
+    // using EpiLoadPipeline = typename CollectiveEpilogue::LoadPipeline;
+    typename EpiLoadPipeline::Params epi_load_pipeline_params1;
+    if (warp_group_role == WarpGroupRole::Producer && producer_warp_role == ProducerWarpRole::Epilogue) {
+      epi_load_pipeline_params1.role = EpiLoadPipeline::ThreadCategory::Producer;
+    }
+    if (warp_group_role == WarpGroupRole::Consumer0 || warp_group_role == WarpGroupRole::Consumer1) {
+      epi_load_pipeline_params1.role = EpiLoadPipeline::ThreadCategory::Consumer;
+    }
+    epi_load_pipeline_params1.dst_blockid = cute::block_rank_in_cluster();
+    epi_load_pipeline_params1.producer_arv_count = NumThreadsPerWarp;
+    epi_load_pipeline_params1.consumer_arv_count = size(TiledMma{});
+    if constexpr (CollectiveEpilogue::RequiresTransactionBytes) {
+      epi_load_pipeline_params1.transaction_bytes = params.epilogue.tma_transaction_bytes;
+    }
+    EpiLoadPipeline epi_load_pipeline1(shared_storage.pipelines.epi_load, epi_load_pipeline_params1);
+
+    // Epilogue Store pipeline
+    // using EpiStorePipeline = typename CollectiveEpilogue::StorePipeline;
+    typename EpiStorePipeline::Params epi_store_pipeline_params1;
+    epi_store_pipeline_params1.always_wait = true;
+    EpiStorePipeline epi_store_pipeline1(epi_store_pipeline_params1);
+
+    typename LoadWarpOrderBarrier::Params params_load_order_barrier1;
+    params_load_order_barrier1.group_id = producer_warp_role == ProducerWarpRole::Mainloop ? 0 : 1;
+    params_load_order_barrier1.group_size = NumThreadsPerWarp;
+    LoadWarpOrderBarrier load_order_barrier1(shared_storage.pipelines.load_order, params_load_order_barrier1);
+
+    // Initialize starting pipeline states for the collectives
+    // Epilogue store pipe is producer-only (consumer is TMA unit, waits via scoreboarding)
+    typename CollectiveMainloop::PipelineState mainloop_pipe_consumer_state1;
+    typename CollectiveEpilogue::LoadPipelineState epi_load_pipe_consumer_state1;
+
+    // For the DMA Load (producer) we start with an opposite phase
+    // i.e., we skip all waits since we know that the buffer is indeed empty
+    PipelineState mainloop_pipe_producer_state1 = cutlass::make_producer_start_state<MainloopPipeline>();
+    PipelineState epi_load_pipe_producer_state1 = cutlass::make_producer_start_state<EpiLoadPipeline>();
+    PipelineState epi_store_pipe_producer_state1 = cutlass::make_producer_start_state<EpiStorePipeline>();
+
+    // auto cluster_wait_fn = [] () {
+    //   // We need this to guarantee that the Pipeline init is visible
+    //   // To all producers and consumer thread blocks in the Cluster
+    //   if constexpr (size(ClusterShape{}) > 1) {
+    //     cute::cluster_arrive_relaxed();
+    //     return [] () { cute::cluster_wait(); };
+    //   }
+    //   else {
+    //     __syncthreads();
+    //     return [] () {}; // do nothing
+    //   }
+    // } ();
+    cute::cluster_arrive_relaxed();
+
+
+    // Optionally append 1s until problem shape is rank-4 in case it is only rank-3 (MNK)
+    // auto problem_shape_MNKL = append<4>(params.problem_shape, Int<1>{}); // problem_shape_MNKL: [2048, 2048, 2048, 1]
+    auto [M, N, K, L] = problem_shape_MNKL;
+    auto problem_shape_MNKL1 = cute::make_tuple(M, 1024, N, 1);
+
+
+    // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
+    //     auto [M, N, K, L] = problem_shape_MNKL;
+    //     printf("problem_shape_MNKL: [%d, %d, %d, %d]\n", int(M), int(N), int(K), int(L));
+    // }
+
+    // Get the appropriate blocks for this thread block -- potential for thread block locality
+    TiledMma tiled_mma1;
+    // auto blk_shape = TileShape{}; // (BLK_M,BLK_N,BLK_K) 这里暂时沿用和GEMM0一样的blk尺寸
+
+    TileScheduler scheduler1{params.scheduler};
+    auto work_tile_info1 = scheduler1.initial_work_tile_info(ClusterShape{});
+
+    // In a warp specialized kernel, collectives expose data movement and compute operations separately
+    CollectiveMainloop collective_mainloop1;
+
+    // Prepare and partition the input tensors. Expects a tuple of tensors where:
+    // get<0>(load_inputs) is the tma tensor A after local tiling so that it has shape (BLK_M,BLK_K,m,k,l)
+    // get<1>(load_inputs) is the tma tensor B after local tiling so that it has shape (BLK_N,BLK_K,n,k,l)
+    auto load_inputs1 = collective_mainloop1.load_init(problem_shape_MNKL1, params.mainloop);
+    static_assert(cute::tuple_size_v<decltype(load_inputs1)> >= 2, "Output of load_init must have at least two elements (A, B)");
+
+    // Extract out partitioned A and B.
+    Tensor gA_mkl1 = get<0>(load_inputs1); // (BLK_M,BLK_K,m,k,l)  ArithTuple(_0,_0,_0) o (_128,_64,16,32,1):(_1@1,_1@0,_128@1,_64@0,_1@2)
+    Tensor gB_nkl1 = get<1>(load_inputs1); // (BLK_N,BLK_K,n,k,l)
+
+    // if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==0&&threadIdx.y==0){
+    //   printf("gA_mkl\n");
+    //   print(gA_mkl);
+    //   printf("\n");
+    // }
+
+
+    // Wait for all thread blocks in the Cluster
+    // cluster_wait_fn();
+    cute::cluster_wait();
+
+
+// 你在复刻GEMM1时，正确地初始化了mainloop_pipe_consumer_state1、epi_load_pipe_consumer_state1等变量。这些初始化看起来没有问题，但需要确保PipelineState类在多次调用时不会产生冲突或共享资源问题。尤其是在多次调用不同GEMM时要注意这一点。....额。。我暂时也看不出来哦。。我对barrier没什么经验。
+
+
+    
 #endif
+
   }
 
 };
