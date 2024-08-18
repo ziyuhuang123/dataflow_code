@@ -106,7 +106,7 @@ void device_kernel(CUTLASS_GRID_CONSTANT typename Operator::Params const params)
   // Dynamic shared memory base pointer
   extern __shared__ char smem[];
   Operator op;
-  op(params, smem);
+  op.exec_gemm0(params, smem);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

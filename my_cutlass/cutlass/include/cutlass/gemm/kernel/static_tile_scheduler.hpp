@@ -180,6 +180,32 @@ public:
   CUTLASS_DEVICE
   WorkTileInfo
   get_current_work_for_linear_idx(uint64_t linear_idx) const {
+// 这是取消persistent的
+  if(linear_idx>uint64_t(cute::block_id_in_cluster().y) + uint64_t(cute::cluster_id_in_grid().y) * uint64_t(scheduler_params.problem_block_number.y)){
+    return WorkTileInfo::invalid_work_tile();
+  }  
+  // Map worker's linear index into the CTA tiled problem shape to the corresponding MNL indices
+  uint64_t work_idx_l, remainder;
+  // if (threadIdx.x == 0 && threadIdx.y == 0) {
+  //   printf("111, bl=(%d)\n", blockIdx.y);
+  // }
+  scheduler_params.divmod_batch_(work_idx_l, remainder, linear_idx);
+// work_idx_l 是 linear_idx 除以 problem_blocks_m * problem_blocks_n 的商。
+// remainder 是 linear_idx 除以 problem_blocks_m * problem_blocks_n 的余数。
+  uint64_t blk_per_grid_dim = scheduler_params.divmod_cluster_shape_minor_.divide(remainder);
+// blk_per_grid_dim 是 remainder 除以 cluster_shape.m() 的商。
+  // if (blockIdx.x == 0 && blockIdx.y == 20 && threadIdx.x == 0 && threadIdx.y == 0) {
+  //   printf("work_idx_l=%llu, remainder=%llu, linear_idx=%llu, total_cluster_size_=%llu, cluster=(%d, %d, %d)\n", work_idx_l, remainder, linear_idx, total_cluster_size_,cluster_shape().x,cluster_shape().y,cluster_shape().z);
+  //   printf("block_id_in_cluster=(%d, %d, %d), cluster_id_in_grid=(%d, %d, %d)\n", cute::block_id_in_cluster().x, cute::block_id_in_cluster().y, cute::block_id_in_cluster().z, cute::cluster_id_in_grid().x, cute::cluster_id_in_grid().y, cute::cluster_id_in_grid().z);
+  // } // work_idx_l=0, remainder=1013, linear_idx=1013, total_grid_size_=112
+
+  auto [work_idx_m, work_idx_n] = Subclass::get_work_idx_m_and_n(blk_per_grid_dim, scheduler_params.divmod_cluster_shape_major_, scheduler_params.divmod_cluster_shape_minor_, scheduler_params.divmod_cluster_blk_major_, scheduler_params.log_swizzle_size_, scheduler_params.raster_order_);
+
+  return {work_idx_m, work_idx_n, static_cast<int32_t>(work_idx_l), true};
+
+
+
+// 这个不用打开
     // if (linear_idx >= (cute::cluster_id_in_grid().y+1)*scheduler_params.problem_block_number.y) {
     //   return WorkTileInfo::invalid_work_tile();
     // }
@@ -190,32 +216,36 @@ public:
     // if (blockIdx.x == 0 && blockIdx.y == 20 && threadIdx.x == 0 && threadIdx.y == 0) {
     //   printf("linear_idx=%llu, upper_bound=%d, lower_bound=%d, bool=%d\n",linear_idx,(cute::cluster_id_in_grid().y+cluster_jump_count*7+1)*scheduler_params.problem_block_number.y, (cute::cluster_id_in_grid().y+cluster_jump_count*7)*scheduler_params.problem_block_number.y, linear_idx<(cute::cluster_id_in_grid().y+cluster_jump_count*7+1)*scheduler_params.problem_block_number.y && linear_idx<(cute::cluster_id_in_grid().y+cluster_jump_count*7+1)*scheduler_params.problem_block_number.y && linear_idx>=(cute::cluster_id_in_grid().y+cluster_jump_count*7)*scheduler_params.problem_block_number.y && linear_idx<scheduler_params.blocks_per_problem_);
     // }
-    if(linear_idx<(cute::cluster_id_in_grid().y+cluster_jump_count*7+1)*scheduler_params.problem_block_number.y && linear_idx>=(cute::cluster_id_in_grid().y+cluster_jump_count*7)*scheduler_params.problem_block_number.y && linear_idx<scheduler_params.blocks_per_problem_){
-      // Map worker's linear index into the CTA tiled problem shape to the corresponding MNL indices
-      uint64_t work_idx_l, remainder;
-      // if (threadIdx.x == 0 && threadIdx.y == 0) {
-      //   printf("111, bl=(%d)\n", blockIdx.y);
-      // }
-      scheduler_params.divmod_batch_(work_idx_l, remainder, linear_idx);
-  // work_idx_l 是 linear_idx 除以 problem_blocks_m * problem_blocks_n 的商。
-  // remainder 是 linear_idx 除以 problem_blocks_m * problem_blocks_n 的余数。
-      uint64_t blk_per_grid_dim = scheduler_params.divmod_cluster_shape_minor_.divide(remainder);
-      // if (blockIdx.x == 0 && blockIdx.y == 20 && threadIdx.x == 0 && threadIdx.y == 0) {
-      //   printf("222\n");
-      // }
-  // blk_per_grid_dim 是 remainder 除以 cluster_shape.m() 的商。
-      // if (blockIdx.x == 0 && blockIdx.y == 20 && threadIdx.x == 0 && threadIdx.y == 0) {
-      //   printf("work_idx_l=%llu, remainder=%llu, linear_idx=%llu, total_cluster_size_=%llu, cluster=(%d, %d, %d)\n", work_idx_l, remainder, linear_idx, total_cluster_size_,cluster_shape().x,cluster_shape().y,cluster_shape().z);
-      //   printf("block_id_in_cluster=(%d, %d, %d), cluster_id_in_grid=(%d, %d, %d)\n", cute::block_id_in_cluster().x, cute::block_id_in_cluster().y, cute::block_id_in_cluster().z, cute::cluster_id_in_grid().x, cute::cluster_id_in_grid().y, cute::cluster_id_in_grid().z);
-      // } // work_idx_l=0, remainder=1013, linear_idx=1013, total_grid_size_=112
 
-      auto [work_idx_m, work_idx_n] = Subclass::get_work_idx_m_and_n(blk_per_grid_dim, scheduler_params.divmod_cluster_shape_major_, scheduler_params.divmod_cluster_shape_minor_, scheduler_params.divmod_cluster_blk_major_, scheduler_params.log_swizzle_size_, scheduler_params.raster_order_);
 
-      return {work_idx_m, work_idx_n, static_cast<int32_t>(work_idx_l), true};
-    }
-    else{
-      return WorkTileInfo::invalid_work_tile();
-    }
+
+// 这是persistent的
+  //   if(linear_idx<(cute::cluster_id_in_grid().y+cluster_jump_count*7+1)*scheduler_params.problem_block_number.y && linear_idx>=(cute::cluster_id_in_grid().y+cluster_jump_count*7)*scheduler_params.problem_block_number.y && linear_idx<scheduler_params.blocks_per_problem_){
+  //     // Map worker's linear index into the CTA tiled problem shape to the corresponding MNL indices
+  //     uint64_t work_idx_l, remainder;
+  //     // if (threadIdx.x == 0 && threadIdx.y == 0) {
+  //     //   printf("111, bl=(%d)\n", blockIdx.y);
+  //     // }
+  //     scheduler_params.divmod_batch_(work_idx_l, remainder, linear_idx);
+  // // work_idx_l 是 linear_idx 除以 problem_blocks_m * problem_blocks_n 的商。
+  // // remainder 是 linear_idx 除以 problem_blocks_m * problem_blocks_n 的余数。
+  //     uint64_t blk_per_grid_dim = scheduler_params.divmod_cluster_shape_minor_.divide(remainder);
+  //     // if (blockIdx.x == 0 && blockIdx.y == 20 && threadIdx.x == 0 && threadIdx.y == 0) {
+  //     //   printf("222\n");
+  //     // }
+  // // blk_per_grid_dim 是 remainder 除以 cluster_shape.m() 的商。
+  //     // if (blockIdx.x == 0 && blockIdx.y == 20 && threadIdx.x == 0 && threadIdx.y == 0) {
+  //     //   printf("work_idx_l=%llu, remainder=%llu, linear_idx=%llu, total_cluster_size_=%llu, cluster=(%d, %d, %d)\n", work_idx_l, remainder, linear_idx, total_cluster_size_,cluster_shape().x,cluster_shape().y,cluster_shape().z);
+  //     //   printf("block_id_in_cluster=(%d, %d, %d), cluster_id_in_grid=(%d, %d, %d)\n", cute::block_id_in_cluster().x, cute::block_id_in_cluster().y, cute::block_id_in_cluster().z, cute::cluster_id_in_grid().x, cute::cluster_id_in_grid().y, cute::cluster_id_in_grid().z);
+  //     // } // work_idx_l=0, remainder=1013, linear_idx=1013, total_grid_size_=112
+
+  //     auto [work_idx_m, work_idx_n] = Subclass::get_work_idx_m_and_n(blk_per_grid_dim, scheduler_params.divmod_cluster_shape_major_, scheduler_params.divmod_cluster_shape_minor_, scheduler_params.divmod_cluster_blk_major_, scheduler_params.log_swizzle_size_, scheduler_params.raster_order_);
+
+  //     return {work_idx_m, work_idx_n, static_cast<int32_t>(work_idx_l), true};
+  //   }
+  //   else{
+  //     return WorkTileInfo::invalid_work_tile();
+  //   }
   }
 
   CUTLASS_DEVICE

@@ -827,7 +827,7 @@ public:
           // Issue TMA stores for the previous subtile
           if (not is_first_iteration and subtile_idx == -1) {
             tma_store_fn(epi_m_prev, epi_n_prev);
-          }
+          }  // 暂时注释，GEMM1算完再存出去吧
           epi_m_prev = epi_m;
           epi_n_prev = epi_n;
         }
@@ -848,12 +848,12 @@ public:
 
         // Post reduction, pre TMA store callback entry point
         constexpr bool issue_smem_store = true; // No smem store predication
-        cst_callbacks.postreduce(epi_m, epi_n, store_pipe_producer_state.count(), issue_smem_store);
+        cst_callbacks.postreduce(epi_m, epi_n, store_pipe_producer_state.count(), issue_smem_store);  // 我暂时没搞明白这一句是干什么的。。。
 
         if constexpr (not DelayTmaStore) {
           // Issue TMA stores for this subtile
           tma_store_fn(epi_m, epi_n);
-        }
+        }  // 暂时注释，GEMM1算完再存出去吧
 
         cst_callbacks.end_loop(epi_m, epi_n);
 
@@ -863,12 +863,43 @@ public:
     if constexpr (DelayTmaStore) {
       // Issue TMA stores for the last subtile
       tma_store_fn(epi_m_prev, epi_n_prev);
-    }
+    }  // 暂时注释，GEMM1算完再存出去吧
 
     // Post-loop fusion callback entry point
     cst_callbacks.end();
 
-    return cute::make_tuple(load_pipe_consumer_state, store_pipe_producer_state);
+
+    if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==383){
+
+
+      // Step 1: 提取三维张量
+      auto tensor_3d = bSG_sD(_, 0, 0, 0);
+      printf("tensor_3d\n");
+      print(tensor_3d);
+      printf("\n");
+      // Step 2: 进一步提取二维张量 (64x256)
+      // auto tensor_2d = size<0>(tensor_3d);
+      auto tensor_2d = make_tensor(tensor_3d.data(), make_shape(64, 256, 2));
+      printf("tensor_2d\n");
+      print(tensor_2d);
+      auto tensor_2d_new = tensor_2d(((_, _), 0));
+      print(tensor_2d_new);
+      printf("tensor_2d_new\n");
+      // Step 3: 打印二维张量 (64x256)
+      // print_layout(tensor_2d);
+      printf("\n");
+      print(tRS_sD);
+      printf("\n");
+      print(bSG_sD);
+      printf("\n");
+      print(gD_epi);
+      printf("\n");
+      printf("epi_n=%d, epi_m=%d\n", size<3>(gD_epi), size<2>(gD_epi));
+    }
+
+
+
+    return cute::make_tuple(load_pipe_consumer_state, store_pipe_producer_state, bSG_sD);
   }
 
   CUTLASS_DEVICE auto

@@ -215,7 +215,13 @@ struct Sm90AuxStore {
 
     CUTLASS_DEVICE void
     postreduce(int epi_m, int epi_n, int store_iteration, bool issue_smem_store) {
+      // if(blockIdx.x==0&&blockIdx.y==0){
+      //   printf("enter cutlass/include/cutlass/epilogue/fusion/sm90_visitor_store_tma_warpspecialized.hpp line 219\n");
+      // }
       if constexpr (EnableNullptr) {
+        // if(blockIdx.x==0&&blockIdx.y==0){
+        //   printf("enter cutlass/include/cutlass/epilogue/fusion/sm90_visitor_store_tma_warpspecialized.hpp line 222\n");
+        // }
         if (params_ptr->is_nullptr) {
           return;
         }
@@ -225,6 +231,9 @@ struct Sm90AuxStore {
       Tensor tRS_rAux = make_tensor(tC_rAux.data(), RLayoutR2S{});                                 // (R2S,R2S_M,R2S_N)
 
       if (issue_smem_store) {
+        // if(blockIdx.x==0&&blockIdx.y==0){
+        //   printf("enter cutlass/include/cutlass/epilogue/fusion/sm90_visitor_store_tma_warpspecialized.hpp line 235\n");
+        // }  // 这三个printf都没有产生输出。。非常奇怪。。。
         int store_pipe_index = store_iteration % Stages;
         copy(tiled_r2s, tRS_rAux, tRS_sAux(_,_,_,store_pipe_index));
       }

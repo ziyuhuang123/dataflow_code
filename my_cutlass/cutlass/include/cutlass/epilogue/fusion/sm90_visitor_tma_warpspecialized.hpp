@@ -481,6 +481,9 @@ struct Sm90VisitorImpl : Sm90VisitorImplBase<Ops...> {
     // Upon exit, all smem stores for TMA must have been issued
     CUTLASS_DEVICE void
     postreduce(int epi_m, int epi_n, int store_iteration, bool issue_smem_store) {
+      // if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==383){
+      //   printf("enter cutlass/include/cutlass/epilogue/fusion/sm90_visitor_tma_warpspecialized.hpp line 485\n");
+      // }
       for_each(callbacks_tuple,
         [&] (auto& callbacks) {
           callbacks.postreduce(epi_m, epi_n, store_iteration, issue_smem_store);

@@ -355,30 +355,33 @@ public:
   }
 
   CUTLASS_DEVICE
-  void
-  operator()(Params const& params, char* smem_buf) {
+  void exec_gemm0(Params const& params, char* smem_buf) {
+// 原先是operator：
+  // void   operator()(Params const& params, char* smem_buf) 
 
-    if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
-        printf("SharedStorageSize=%d\n", SharedStorageSize);
-        printf("PipelineStorageSize=%d\n", PipelineStorageSize);
-        printf("TensorStorageSize=%d\n", TensorStorageSize);
-        printf("MainloopPipelineStorageSize=%d\n", MainloopPipelineStorageSize);
-        printf("EpiLoadPipelineStorageSize=%d\n", EpiLoadPipelineStorageSize);
-        printf("LoadWarpOrderBarrierSharedStorageSize=%d\n", LoadWarpOrderBarrierSharedStorageSize);
-        printf("MainloopTensorStorageSize=%d\n", MainloopTensorStorageSize);
-        printf("EpilogueTensorStorageSize=%d\n", EpilogueTensorStorageSize);
-        printf("TensorStorageSmemASize=%d\n", TensorStorageSmemASize);
-        printf("TensorStorageSmemBSize=%d\n", TensorStorageSmemBSize);
-        printf("CollectiveStorage_inner_size=%d\n", CollectiveStorage_inner_size);
-        printf("FusionStorage_inner_size=%d\n", FusionStorage_inner_size);
-        printf("CollectiveStorage_inner_smemD_size=%d\n", CollectiveStorage_inner_smemD_size);
-        printf("CollectiveStorage_inner_smemC_size=%d\n", CollectiveStorage_inner_smemC_size);
-        printf("//////////////////\n");
-        printf("TileShape=(%d, %d, %d)\n", TileShape_0, TileShape_1, TileShape_2);
-        printf("stages_value=%d\n", stages_value);
-        printf("SmemLayoutAtomA=(%d, %d)\n", SmemLayoutAtomA_0, SmemLayoutAtomA_1);
-        printf("SmemLayoutA=(%d, %d, %d)\n", SmemLayoutA_0, SmemLayoutA_1, SmemLayoutA_2);
-    }
+
+
+    // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
+    //     printf("SharedStorageSize=%d\n", SharedStorageSize);
+    //     printf("PipelineStorageSize=%d\n", PipelineStorageSize);
+    //     printf("TensorStorageSize=%d\n", TensorStorageSize);
+    //     printf("MainloopPipelineStorageSize=%d\n", MainloopPipelineStorageSize);
+    //     printf("EpiLoadPipelineStorageSize=%d\n", EpiLoadPipelineStorageSize);
+    //     printf("LoadWarpOrderBarrierSharedStorageSize=%d\n", LoadWarpOrderBarrierSharedStorageSize);
+    //     printf("MainloopTensorStorageSize=%d\n", MainloopTensorStorageSize);
+    //     printf("EpilogueTensorStorageSize=%d\n", EpilogueTensorStorageSize);
+    //     printf("TensorStorageSmemASize=%d\n", TensorStorageSmemASize);
+    //     printf("TensorStorageSmemBSize=%d\n", TensorStorageSmemBSize);
+    //     printf("CollectiveStorage_inner_size=%d\n", CollectiveStorage_inner_size);
+    //     printf("FusionStorage_inner_size=%d\n", FusionStorage_inner_size);
+    //     printf("CollectiveStorage_inner_smemD_size=%d\n", CollectiveStorage_inner_smemD_size);
+    //     printf("CollectiveStorage_inner_smemC_size=%d\n", CollectiveStorage_inner_smemC_size);
+    //     printf("//////////////////\n");
+    //     printf("TileShape=(%d, %d, %d)\n", TileShape_0, TileShape_1, TileShape_2);
+    //     printf("stages_value=%d\n", stages_value);
+    //     printf("SmemLayoutAtomA=(%d, %d)\n", SmemLayoutAtomA_0, SmemLayoutAtomA_1);
+    //     printf("SmemLayoutA=(%d, %d, %d)\n", SmemLayoutA_0, SmemLayoutA_1, SmemLayoutA_2);
+    // }
 
     using namespace cute;
     using X = Underscore;
@@ -501,7 +504,13 @@ public:
     } ();
 
     // Optionally append 1s until problem shape is rank-4 in case it is only rank-3 (MNK)
-    auto problem_shape_MNKL = append<4>(params.problem_shape, Int<1>{});
+    auto problem_shape_MNKL = append<4>(params.problem_shape, Int<1>{}); // problem_shape_MNKL: [2048, 2048, 2048, 1]
+
+
+    // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
+    //     auto [M, N, K, L] = problem_shape_MNKL;
+    //     printf("problem_shape_MNKL: [%d, %d, %d, %d]\n", int(M), int(N), int(K), int(L));
+    // }
 
     // Get the appropriate blocks for this thread block -- potential for thread block locality
     TiledMma tiled_mma;
@@ -520,8 +529,15 @@ public:
     static_assert(cute::tuple_size_v<decltype(load_inputs)> >= 2, "Output of load_init must have at least two elements (A, B)");
 
     // Extract out partitioned A and B.
-    Tensor gA_mkl = get<0>(load_inputs); // (BLK_M,BLK_K,m,k,l)
+    Tensor gA_mkl = get<0>(load_inputs); // (BLK_M,BLK_K,m,k,l)  ArithTuple(_0,_0,_0) o (_128,_64,16,32,1):(_1@1,_1@0,_128@1,_64@0,_1@2)
     Tensor gB_nkl = get<1>(load_inputs); // (BLK_N,BLK_K,n,k,l)
+
+    // if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==0&&threadIdx.y==0){
+    //   printf("gA_mkl\n");
+    //   print(gA_mkl);
+    //   printf("\n");
+    // }
+
 
     // Wait for all thread blocks in the Cluster
     cluster_wait_fn();
@@ -584,7 +600,7 @@ public:
           if (do_load_order_arrive) {
             load_order_barrier.arrive();
             do_load_order_arrive = false;
-          }
+          } // 但是producer的epilogue根本不运行啊。。这里应该没有耽误很多时间吧。。。？
 
           // Get next work tile
           work_tile_info = scheduler.fetch_next_work(work_tile_info);
@@ -640,6 +656,9 @@ public:
       // Do we potentially issue tail arrives for TMA stores, if epilogue load is waiting for it
       bool do_store_tail = false;
       while (work_tile_info.is_valid()) {
+        // if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==383){
+        //   printf("enter here once\n");
+        // }  // 打开这个为了检查是不是persistent 循环输出多次就是persistent。反之则不是
         // Compute m_coord, n_coord, l_coord with the post-tiled m-shape and n-shape
         auto m_coord = idx2crd(work_tile_info.M_idx, shape<2>(gA_mkl));
         auto n_coord = idx2crd(work_tile_info.N_idx, shape<2>(gB_nkl));
@@ -684,7 +703,7 @@ public:
           //   printf("enter cutlass/include/cutlass/gemm/kernel/sm90_gemm_tma_warpspecialized_cooperative.hpp, th=(%d, %d)\n", threadIdx.x, threadIdx.y);
           // }
           // Epilogue and write to gD
-          auto [epi_load_pipe_consumer_state_next, epi_store_pipe_producer_state_next] =
+          auto [epi_load_pipe_consumer_state_next, epi_store_pipe_producer_state_next, sD_result] =
           collective_epilogue.store(
             epi_load_pipeline,
             epi_load_pipe_consumer_state,
@@ -717,6 +736,10 @@ public:
         );
       }
     } // Consumer Warp Groups End
+
+
+    // __syncthreads(); // 这里不需要cluster sync。因为每个block自己算完存到SMEM就够了。
+
 #endif
   }
 

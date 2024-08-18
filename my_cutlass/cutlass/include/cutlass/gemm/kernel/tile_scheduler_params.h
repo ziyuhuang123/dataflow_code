@@ -267,7 +267,7 @@ struct PersistentTileSchedulerSm90Params {
             cta_per_device       / cluster_shape.m(),
             problem_blocks_total / cluster_shape.m());
 
-        // launch_grid.y = (problem_blocks_m/cluster_shape.m()) * cluster_size;
+        launch_grid.y = (problem_blocks_m/cluster_shape.m()) * cluster_size;  // 打开这个选项就不是persistent了
         // 额。。。好像上面这里就等同于problem_blocks_m*cluster_shape.n()啊？
         // printf("launch_grid=(%d, %d), problem_blocks_m=%d, cluster_shape.m()=%d, problem_blocks_total=%d\n", launch_grid.x, launch_grid.y, problem_blocks_m, cluster_shape.m(), problem_blocks_total);
       }

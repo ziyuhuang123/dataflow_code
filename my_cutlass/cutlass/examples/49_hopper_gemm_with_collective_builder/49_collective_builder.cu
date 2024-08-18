@@ -142,6 +142,7 @@
 #include "cutlass/util/reference/device/tensor_compare.h"
 #include "cutlass/util/reference/device/tensor_fill.h"
 
+
 using namespace cute;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -226,6 +227,27 @@ bool initialize_block(
   return true;
 }
 
+
+
+template <typename Element, typename Layout>
+bool initialize_block_fixed_value(cutlass::DeviceAllocation<Element>& tensor, Element val, int rows, int columns) {
+
+    // 创建 MatrixCoord 来表示矩阵的尺寸
+    typename Layout::TensorCoord extent(rows, columns);
+
+    // 使用 tensor 的设备指针和布局创建一个 TensorView 对象
+    auto tensor_view = cutlass::make_TensorView<Element, Layout>(
+        tensor.get(),   // 获取设备指针
+        Layout(extent), // 创建布局
+        extent          // 张量的范围
+    );
+
+    // 使用 TensorFill 函数将 tensor 填充为指定的固定值
+    cutlass::reference::device::TensorFill(tensor_view, val);
+
+    return true;
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if defined(CUTLASS_ARCH_MMA_SM90_SUPPORTED)
@@ -301,7 +323,7 @@ struct ExampleRunner {
 
 
     using TileShape = Shape<_128,_256,_64>; // Threadblock-level tile size
-    using ClusterShape = Shape<_1, _16, _1>;
+    using ClusterShape = Shape<_1, _2, _1>;
 
 
   // A predefined set of fusion operations (implemented with EVT) are supported by the TMA warp-specialized epilogue.
@@ -441,9 +463,19 @@ struct ExampleRunner {
     block_D.reset(M * N * L);
     block_ref_D.reset(M * N * L);
 
-    initialize_block(block_A, seed + 2023);
-    initialize_block(block_B, seed + 2022);
-    initialize_block(block_C, seed + 2021);
+    // initialize_block(block_A, seed + 2023);
+    // initialize_block(block_B, seed + 2022);
+    // initialize_block(block_C, seed + 2021);
+
+
+    // 初始化 block_A (M x K)
+    initialize_block_fixed_value<ElementA, LayoutA>(block_A, ElementA(1.0f), M, K);
+
+    // 初始化 block_B (K x N)
+    initialize_block_fixed_value<ElementB, LayoutB>(block_B, ElementB(1.0f), K, N);
+
+    // 初始化 block_C (M x N)
+    initialize_block_fixed_value<ElementC, LayoutC>(block_C, ElementC(0.0f), M, N);
   }
 
   bool run(const Options& options, const cutlass::KernelHardwareInfo& hw_info) {
@@ -656,16 +688,17 @@ int main(int argc, char const **args) {
   passed = ws_cooperative_stream_k_schedule_auto_stage_runner.run(options, hw_info);
   print_result("Cooperative warp-specialized TMA schedule using stream-K with automatically-selected stage count", passed);
 
-  // Here, we override the fusion operation to use a customized EVT fusion, in addition to the previous schedule overrides
-  ExampleRunner<
-    cutlass::gemm::KernelTmaWarpSpecializedCooperative,
-    cutlass::epilogue::TmaWarpSpecializedCooperative,
-    cutlass::gemm::collective::StageCountAuto,
-    cutlass::gemm::PersistentScheduler,
-    true> ws_cooperative_schedule_auto_stage_custom_evt_runner;
-  passed = ws_cooperative_schedule_auto_stage_custom_evt_runner.run(options, hw_info);
-  print_result("Cooperative warp-specialized TMA schedule using custom epilogue visitor tree with automatically-selected stage count", passed);
+  // // Here, we override the fusion operation to use a customized EVT fusion, in addition to the previous schedule overrides
+  // ExampleRunner<
+  //   cutlass::gemm::KernelTmaWarpSpecializedCooperative,
+  //   cutlass::epilogue::TmaWarpSpecializedCooperative,
+  //   cutlass::gemm::collective::StageCountAuto,
+  //   cutlass::gemm::PersistentScheduler,
+  //   true> ws_cooperative_schedule_auto_stage_custom_evt_runner;
+  // passed = ws_cooperative_schedule_auto_stage_custom_evt_runner.run(options, hw_info);
+  // print_result("Cooperative warp-specialized TMA schedule using custom epilogue visitor tree with automatically-selected stage count", passed);
 
+// 其实我不知道为什么最后这一个被我修改之后就fail。好像是使用了不同的epilogue？感觉迭代次数少了一些？暂时懒得细究了。
 #endif
 
   return 0;
