@@ -287,12 +287,17 @@ struct ExampleRunner {
   using LayoutB = cutlass::layout::ColumnMajor;
   using LayoutC = cutlass::layout::ColumnMajor;
   using LayoutD = cutlass::layout::ColumnMajor;
+  using Layout_gemm1_weight = cutlass::layout::ColumnMajor;
+
 
   using ElementA = cutlass::half_t;
   using ElementB = cutlass::half_t;
   using ElementC = cutlass::half_t;
   using ElementD = cutlass::half_t;
-  // using ElementD = void;
+  using Element_gemm1_weight = cutlass::half_t;
+
+  
+
   using ElementAccumulator = float;
   using ElementCompute = float;
   using ElementScalar = float;
@@ -302,6 +307,8 @@ struct ExampleRunner {
   static constexpr int AlignmentB = 16 / sizeof(ElementB);
   static constexpr int AlignmentC = 16 / sizeof(ElementC);
   static constexpr int AlignmentD = 16 / sizeof(ElementD);
+  static constexpr int Alignment_gemm1_weight = 16 / sizeof(Element_gemm1_weight);
+
 
   static_assert(not UseCustomEVT ||
     (cute::is_same_v<EpilogueScheduleType, cutlass::epilogue::TmaWarpSpecialized> ||
@@ -365,6 +372,8 @@ struct ExampleRunner {
           StageCountType>,
       MainloopScheduleType
     >::CollectiveOp;
+// 按理说上面都应该加入gemm1_weight的layout什么的。。。不过我偷懒。。暂时先借用B的一用吧。
+
 
   using GemmKernel = cutlass::gemm::kernel::GemmUniversal<
       Shape<int,int,int,int>,
@@ -381,11 +390,13 @@ struct ExampleRunner {
   using StrideB = typename Gemm::GemmKernel::StrideB;
   using StrideC = typename Gemm::GemmKernel::StrideC;
   using StrideD = typename Gemm::GemmKernel::StrideD;
+  using Stride_gemm1_weight = typename Gemm::GemmKernel::StrideB;  // 就先偷B的一用吧。
 
   using LayoutTagA = cutlass::gemm::detail::StrideToLayoutTagA_t<StrideA>;
   using LayoutTagB = cutlass::gemm::detail::StrideToLayoutTagB_t<StrideB>;
   using LayoutTagC = cutlass::gemm::detail::StrideToLayoutTagC_t<StrideC>;
   using LayoutTagD = cutlass::gemm::detail::StrideToLayoutTagC_t<StrideD>;
+  using LayoutTag_gemm1_weight = cutlass::gemm::detail::StrideToLayoutTagB_t<Stride_gemm1_weight>; // 这个跟B学！毕竟是权重矩阵
 
   //
   // Data members
@@ -396,12 +407,14 @@ struct ExampleRunner {
   StrideB stride_B;
   StrideC stride_C;
   StrideD stride_D;
+  Stride_gemm1_weight stride_gemm1_weight;
   uint64_t seed = 0;
 
   cutlass::DeviceAllocation<typename Gemm::ElementA> block_A;
   cutlass::DeviceAllocation<typename Gemm::ElementB> block_B;
   cutlass::DeviceAllocation<typename Gemm::ElementC> block_C;
   cutlass::DeviceAllocation<typename Gemm::ElementD> block_D;
+  cutlass::DeviceAllocation<typename Gemm::ElementB> block_gemm1_weight;  // 就先偷B的一用吧。
   cutlass::DeviceAllocation<typename Gemm::ElementD> block_ref_D;
 
   //
@@ -445,12 +458,14 @@ struct ExampleRunner {
     bool passed = cutlass::reference::device::BlockCompareEqual(block_ref_D.get(), block_D.get(), block_D.size());
 
     return passed;
-  }
+  } // 暂时懒得改。。
 
   /// Initialize operands to be used in the GEMM and reference GEMM
   void initialize(const ProblemShapeType& problem_size) {
-    auto problem_shape_MNKL = cute::append<4>(problem_size, 1);
-    auto [M, N, K, L] = problem_shape_MNKL;
+    auto extended_problem_shape_MNKL = cute::append<4>(problem_size, 1); // 后面好像有很多assert。可能报错得消一消。。。extended_problem_shape_MNKL
+    auto problem_shape_MNKL = cute::append<5>(extended_problem_shape_MNKL, 4096);
+
+    auto [M, N, K, L, T] = problem_shape_MNKL;
 
     stride_A = cutlass::make_cute_packed_stride(StrideA{}, cute::make_shape(M, K, L));
     stride_B = cutlass::make_cute_packed_stride(StrideB{}, cute::make_shape(N, K, L));

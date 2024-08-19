@@ -569,18 +569,14 @@ public:
           auto blk_coord = make_coord(m_coord, n_coord, _, l_coord);
 
           // Get the number of K tiles to compute for this work as well as the starting K tile offset of the work.
-          auto work_k_tile_count = TileScheduler::get_work_k_tile_count(work_tile_info, problem_shape_MNKL, blk_shape);
-          auto work_k_tile_start = TileScheduler::get_work_k_tile_start(work_tile_info);
-          auto k_tile_iter = cute::make_coord_iterator(idx2crd(work_k_tile_start, shape<3>(gA_mkl)), shape<3>(gA_mkl));
+          auto work_k_tile_count = TileScheduler::get_work_k_tile_count(work_tile_info, problem_shape_MNKL, blk_shape);  // 就是问题的K尺度除以tile的k尺度。比如2048/64，此处就是32
+          auto work_k_tile_start = TileScheduler::get_work_k_tile_start(work_tile_info); // 三种策略。。只有streamK是返回work_tile_info.K_idx，其他俩都直接返0
+          auto k_tile_iter = cute::make_coord_iterator(idx2crd(work_k_tile_start, shape<3>(gA_mkl)), shape<3>(gA_mkl)); // 很明显就是构建从work_k_tile_start到shape<3>(gA_mkl)，迭代次数是shape<3>(gA_mkl)的迭代器。当然shape<3>(gA_mkl)就是problem_k/tile_k就是32这里。
 
-          // if (blockIdx.x == 0 && blockIdx.y == 20 && threadIdx.x == 0 && threadIdx.y == 0) {
-          //     printf("work_tile_info: (M_idx: %d, N_idx: %d, L_idx: %d, threadIdx.x: %d)\n", work_tile_info.M_idx, work_tile_info.N_idx, work_tile_info.L_idx, threadIdx.x);
-          //     printf("blk_coord(m n)=(%d, %d)\n", m_coord, n_coord);
-          //     if(print_out==true){
-          //       printf("gA_mkl: (%d, %d, %d, %d, %d)\n", shape<0>(gA_mkl), shape<1>(gA_mkl), shape<2>(gA_mkl), shape<3>(gA_mkl), shape<4>(gA_mkl));
-          //       printf("gB_mkl: (%d, %d, %d, %d, %d)\n", shape<0>(gB_nkl), shape<1>(gB_nkl), shape<2>(gB_nkl), shape<3>(gB_nkl), shape<4>(gB_nkl));
-          //       print_out=false;
-          //     }
+
+          // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
+          //     // 打印工作块的K维tile数
+          //     printf("work_k_tile_count: %d, work_k_tile_start: %d, shape<3>(gA_mkl)=%d\n", work_k_tile_count, work_k_tile_start, shape<3>(gA_mkl));
           // }
 
 
@@ -871,7 +867,77 @@ public:
 
 // 你在复刻GEMM1时，正确地初始化了mainloop_pipe_consumer_state1、epi_load_pipe_consumer_state1等变量。这些初始化看起来没有问题，但需要确保PipelineState类在多次调用时不会产生冲突或共享资源问题。尤其是在多次调用不同GEMM时要注意这一点。....额。。我暂时也看不出来哦。。我对barrier没什么经验。
 
+    // if (warp_group_role == WarpGroupRole::Producer) {
+    //   cutlass::arch::warpgroup_reg_dealloc<LoadRegisterRequirement>();
 
+    //   CollectiveEpilogue collective_epilogue1(params.epilogue, shared_storage.tensors.epilogue);
+
+    //   // Mainloop Producer Warp
+    //   if (producer_warp_role == ProducerWarpRole::Mainloop) {
+    //     // bool do_load_order_arrive = true;
+    //     while (work_tile_info1.is_valid()) {
+    //       // iter_num += 1;
+    //       if (!TileScheduler::valid_warpgroup_in_work_tile(work_tile_info1)) {
+    //         // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
+    //         //   printf("enter line 516\n");
+    //         // } // 奇怪。。。完全没有进入这里。。。
+    //         work_tile_info1 = scheduler1.fetch_next_work(work_tile_info1);
+    //         continue;
+    //       }
+
+    //       // Compute m_coord, n_coord, l_coord with the post-tiled m-shape and n-shape
+    //       auto m_coord1 = idx2crd(work_tile_info1.M_idx, shape<2>(gA_mkl));
+    //       auto n_coord1 = idx2crd(work_tile_info1.N_idx, shape<2>(gB_nkl));// n需要修改。要算完一整列的每一个n。
+    //       auto l_coord1 = idx2crd(work_tile_info1.L_idx, shape<4>(gB_nkl));
+    //       auto blk_coord1 = make_coord(m_coord1, n_coord1, _, l_coord1);
+
+    //       // Get the number of K tiles to compute for this work as well as the starting K tile offset of the work.
+    //       auto work_k_tile_count1 = TileScheduler::get_work_k_tile_count(work_tile_info1, problem_shape_MNKL1, blk_shape);  // 这里的blk_shape和之前一样，就不需要加1了
+    //       auto work_k_tile_start1 = TileScheduler::get_work_k_tile_start(work_tile_info1);
+    //       auto k_tile_iter1 = cute::make_coord_iterator(idx2crd(work_k_tile_start1, shape<3>(gA_mkl1)), shape<3>(gA_mkl1));
+
+    //       // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
+    //       //     printf("work_tile_info: (M_idx: %d, N_idx: %d, L_idx: %d, threadIdx.x: %d)\n", work_tile_info.M_idx, work_tile_info.N_idx, work_tile_info.L_idx, threadIdx.x);
+    //       //     printf("blk_coord(m n)=(%d, %d)\n", m_coord, n_coord);
+    //       //     if(print_out==true){
+    //       //       printf("gA_mkl: (%d, %d, %d, %d, %d)\n", shape<0>(gA_mkl), shape<1>(gA_mkl), shape<2>(gA_mkl), shape<3>(gA_mkl), shape<4>(gA_mkl));
+    //       //       printf("gB_mkl: (%d, %d, %d, %d, %d)\n", shape<0>(gB_nkl), shape<1>(gB_nkl), shape<2>(gB_nkl), shape<3>(gB_nkl), shape<4>(gB_nkl));
+    //       //       print_out=false;
+    //       //     }
+    //       // }
+
+
+    //       // collective_mainloop1.load(
+    //       //   params.mainloop,
+    //       //   mainloop_pipeline1,
+    //       //   mainloop_pipe_producer_state1,
+    //       //   load_inputs1,
+    //       //   blk_coord1,
+    //       //   k_tile_iter1, work_k_tile_count1,
+    //       //   lane_idx,
+    //       //   block_rank_in_cluster,
+    //       //   shared_storage.tensors.mainloop
+    //       // );
+
+
+    //       // Update starting pipeline state for the next tile
+    //       mainloop_pipe_producer_state1.advance(work_k_tile_count1);
+
+    //       // // Signal for the epilogue load warp to begin
+    //       // if (do_load_order_arrive) {
+    //       //   load_order_barrier.arrive();
+    //       //   do_load_order_arrive = false;
+    //       // } // 但是producer的epilogue根本不运行啊。。这里应该没有耽误很多时间吧。。。？
+
+    //       // Get next work tile
+    //       work_tile_info1 = scheduler1.fetch_next_work(work_tile_info1);
+    //     } // Scheduler work fetch loop
+
+    //     // Make sure all Consumer Warp Groups have been waited upon
+    //     collective_mainloop1.load_tail(mainloop_pipeline1, mainloop_pipe_producer_state1);
+
+    //   } // Mainloop Producer Warp End
+    // } // Producer Warp Group End
     
 #endif
 

@@ -417,6 +417,105 @@ struct CollectiveMma<
     }
   }
 
+
+  /// Perform a collective-scoped matrix multiply-accumulate
+  /// Producer Perspective 在GEMM1里面只需要读B，不需要读A
+  template <
+    class TensorA, class TensorB,
+    class KTileIterator, class BlockCoord
+  >
+  CUTLASS_DEVICE void
+  load_partial(
+      Params const& mainloop_params,
+      MainloopPipeline pipeline,
+      PipelineState smem_pipe_write,
+      cute::tuple<TensorA, TensorB> const& load_inputs,
+      BlockCoord const& blk_coord,
+      KTileIterator k_tile_iter, int k_tile_count,
+      int thread_idx,
+      uint32_t block_rank_in_cluster,
+      TensorStorage& shared_tensors) {
+    int lane_predicate = cute::elect_one_sync();
+
+    if (lane_predicate) {
+      Tensor sA = make_tensor(make_smem_ptr(shared_tensors.smem_A.data()), SmemLayoutA{});        // (BLK_M,BLK_K,PIPE)
+      Tensor sB = make_tensor(make_smem_ptr(shared_tensors.smem_B.data()), SmemLayoutB{});        // (BLK_N,BLK_K,PIPE)
+
+      //
+      // Prepare the TMA loads for A and B
+      //
+
+      constexpr uint32_t cluster_shape_x = get<0>(typename DispatchPolicy::ClusterShape());
+      uint2 cluster_local_block_id = {block_rank_in_cluster % cluster_shape_x, block_rank_in_cluster / cluster_shape_x};
+
+      Tensor gA_mkl = get<0>(load_inputs);
+      Tensor gB_nkl = get<1>(load_inputs);
+
+      auto block_tma_a = mainloop_params.tma_load_a.get_slice(cluster_local_block_id.y);
+      auto block_tma_b = mainloop_params.tma_load_b.get_slice(cluster_local_block_id.x);
+
+      // Partition the inputs based on the current block coordinates.
+      auto [m_coord, n_coord, k_coord, l_coord] = blk_coord;
+
+      // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
+      //   printf("inner blk_coord=(%d, %d, %d, %d)\n", m_coord, n_coord, k_coord, l_coord);
+      // }
+
+
+      Tensor gA = gA_mkl(_,_,m_coord,_,l_coord);                                                     // (BLK_M,BLK_K,k)
+      Tensor gB = gB_nkl(_,_,n_coord,_,l_coord);                                                     // (BLK_N,BLK_K,k)
+
+      // Applies the mapping from block_tma_a
+      Tensor tAgA = block_tma_a.partition_S(gA);                                                 // (TMA,TMA_M,TMA_K,k)
+      Tensor tAsA = block_tma_a.partition_D(sA);                                              // (TMA,TMA_M,TMA_K,PIPE)
+
+      Tensor tBgB = block_tma_b.partition_S(gB);                                                 // (TMA,TMA_N,TMA_K,k)
+      Tensor tBsB = block_tma_b.partition_D(sB);                                              // (TMA,TMA_N,TMA_K,PIPE)
+
+      uint16_t mcast_mask_a = 0;
+      uint16_t mcast_mask_b = 0;
+
+      // Issue TmaLoads
+      // Maps the tile -> block, value
+      if constexpr (cute::is_same_v<GmemTiledCopyA, SM90_TMA_LOAD_MULTICAST>) {
+        auto block_layout = Layout<typename DispatchPolicy::ClusterShape>{}; // (m,n) -> block_id
+        for (int n = 0; n < size<1>(block_layout); ++n) {
+          mcast_mask_a |= (uint16_t(1) << block_layout(cluster_local_block_id.x,n,Int<0>{}));
+        }
+      }
+
+      if constexpr (cute::is_same_v<GmemTiledCopyB, SM90_TMA_LOAD_MULTICAST>) {
+        auto block_layout = Layout<typename DispatchPolicy::ClusterShape>{}; // (m,n) -> block_id
+        for (int m = 0; m < size<0>(block_layout); ++m) {
+          mcast_mask_b |= (uint16_t(1) << block_layout(m,cluster_local_block_id.y,Int<0>{}));
+        }
+      }
+
+      // Mainloop
+      CUTLASS_PRAGMA_NO_UNROLL
+      for ( ; k_tile_count > 0; --k_tile_count) {
+        // LOCK smem_pipe_write for _writing_
+        pipeline.producer_acquire(smem_pipe_write);
+
+        //
+        // Copy gmem to smem for *k_tile_iter
+        //
+
+        using BarrierType = typename MainloopPipeline::ProducerBarrierType;
+        BarrierType* tma_barrier = pipeline.producer_get_barrier(smem_pipe_write);
+
+        int write_stage = smem_pipe_write.index();
+        // copy(mainloop_params.tma_load_a.with(*tma_barrier, mcast_mask_a), tAgA(_,_,_,*k_tile_iter), tAsA(_,_,_,write_stage));
+        copy(mainloop_params.tma_load_b.with(*tma_barrier, mcast_mask_b), tBgB(_,_,_,*k_tile_iter), tBsB(_,_,_,write_stage));
+        ++k_tile_iter;
+// 奇怪，官方文档说要用producer_commit与producer_acquire配合。但是这里却没有。。好像commit是只有multistage模式才需要。。难道说tma自带某种属性。。？
+        // Advance smem_pipe_write
+        ++smem_pipe_write;
+      }
+    }
+  }
+
+
   /// Perform a Producer Epilogue to prevent early exit of blocks in a Cluster
   CUTLASS_DEVICE void
   load_tail(MainloopPipeline pipeline, PipelineState smem_pipe_write) {
@@ -503,7 +602,11 @@ struct CollectiveMma<
     PipelineState smem_pipe_release = smem_pipe_read;
 
     // Prologue GMMAs
-    int prologue_mma_count = min(K_PIPE_MMAS, k_tile_count);
+    int prologue_mma_count = min(K_PIPE_MMAS, k_tile_count);  // K_PIPE_MMAS: 1, k_tile_count: 32, prologue_mma_count: 1
+    // if(blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 383 && threadIdx.y == 0) {
+    //     printf("K_PIPE_MMAS: %d, k_tile_count: %d, prologue_mma_count: %d\n", K_PIPE_MMAS, k_tile_count, prologue_mma_count);
+    // }
+
     assert(k_tile_count >= 1);
     tiled_mma.accumulate_ = GMMA::ScaleOut::Zero;
     warpgroup_fence_operand(accum);
