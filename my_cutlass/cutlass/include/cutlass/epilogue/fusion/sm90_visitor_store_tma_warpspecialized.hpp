@@ -107,8 +107,8 @@ struct Sm90AuxStore {
   static constexpr Params
   to_underlying_arguments(ProblemShape const& problem_shape, Arguments const& args, void* workspace) {
     // Optionally append 1s until problem shape is rank-4 in case its is only rank-3 (MNK)
-    auto problem_shape_mnkl = append<4>(problem_shape, 1);
-    auto [M, N, K, L] = problem_shape_mnkl;
+    auto problem_shape_mnkl = append<5>(problem_shape, 1);
+    auto [M, N, K, L, T] = problem_shape_mnkl;
 
     bool is_nullptr = false;
     if constexpr (EnableNullptr) {
@@ -262,7 +262,7 @@ struct Sm90AuxStore {
   CUTLASS_DEVICE auto
   get_consumer_store_callbacks(ConsumerStoreArgs<Args...> const& args) {
 
-    auto [M, N, K, L] = args.problem_shape_mnkl;
+    auto [M, N, K, L, T] = args.problem_shape_mnkl;
     auto [m, n, k, l] = args.tile_coord_mnkl;
     Tensor mAux = params_ptr->tma_store_aux.get_tma_tensor(make_shape(M,N,L));                               // (M,N,L)
     Tensor gAux = local_tile(mAux, take<0,2>(args.tile_shape_mnk), make_coord(m,n,l));                 // (CTA_M,CTA_N)
@@ -354,7 +354,7 @@ public:
   initialize_workspace(ProblemShape const& problem_shape, Arguments const& args, void* workspace, cudaStream_t stream,
     CudaHostAdapter* cuda_adapter = nullptr) {
     if constexpr (IsAtomic) {
-      auto [M, N, K, L] = problem_shape;
+      auto [M, N, K, L, T] = problem_shape;
       Layout mScalar_layout = make_layout(make_shape(M,N,L), args.dScalar);
       if (args.ptr_scalar != nullptr) {
         return fill_workspace(args.ptr_scalar, ElementOutput(args.reduction_identity), cosize(mScalar_layout), stream, cuda_adapter);
@@ -527,7 +527,7 @@ public:
       reduction_buffer = nullptr;
     }
     else if constexpr (FinalReduction) {
-      auto [M, N, K, L] = problem_shape;
+      auto [M, N, K, L, T] = problem_shape;
       auto [tile_M, tile_N, tile_K] = CtaTileShapeMNK{};
       size_t tile_counters_offset = product(ceil_div(make_shape(size<>(M), size<>(N), L), make_shape(tile_M, tile_N))) * tile_N * sizeof(ElementCompute);
       tile_counters_offset = round_nearest(tile_counters_offset, MinWorkspaceAlignment);
@@ -562,7 +562,7 @@ public:
     }
 
     size_t workspace_size = 0;
-    auto [M, N, K, L] = problem_shape;
+    auto [M, N, K, L, T] = problem_shape;
     auto [tile_M, tile_N, tile_K] = CtaTileShapeMNK{};
     // Increment by size of reduction buffer
     workspace_size += product(ceil_div(make_shape(size<>(M),size<>(N),L), make_shape(tile_M, tile_N))) * tile_N * sizeof(ElementCompute);
@@ -577,7 +577,7 @@ public:
   initialize_workspace(ProblemShape const& problem_shape, Arguments const& args, void* workspace, cudaStream_t stream,
     CudaHostAdapter* cuda_adapter = nullptr) {
     if constexpr (IsAtomic) {
-      auto [M, N, K, L] = problem_shape;
+      auto [M, N, K, L, T] = problem_shape;
       Layout mRow_layout = make_layout(make_shape(size<>(M),size<>(N),size<>(L)), args.dRow);
       if (args.ptr_row != nullptr) {
         return fill_workspace(args.ptr_row, ElementOutput(args.reduction_identity), cosize(mRow_layout), stream, cuda_adapter);
@@ -585,7 +585,7 @@ public:
       return Status::kSuccess;
     }
     else if constexpr (FinalReduction) {
-      auto [M, N, K, L] = problem_shape;
+      auto [M, N, K, L, T] = problem_shape;
       auto [tile_M, tile_N, tile_K] = CtaTileShapeMNK{};
       size_t tile_counters_offset = product(ceil_div(make_shape(size<>(M),size<>(N),L), make_shape(tile_M, tile_N))) * tile_N * sizeof(ElementCompute);
       tile_counters_offset = round_nearest(tile_counters_offset, MinWorkspaceAlignment);
@@ -912,7 +912,7 @@ public:
 
     // Partition output gmem and register tensors
     auto [tile_M, tile_N, tile_K] = args.tile_shape_mnk;
-    auto [M, N, K, L] = args.problem_shape_mnkl;
+    auto [M, N, K, L, T] = args.problem_shape_mnkl;
     auto [m, n, k, l] = args.tile_coord_mnkl;
 
     Tensor mRow = make_tensor(make_gmem_ptr<ElementOutput>(params.ptr_row), make_shape(M,N,L), params.dRow); // (M,N,L)
@@ -1000,7 +1000,7 @@ public:
       reduction_buffer = nullptr;
     }
     else if constexpr (FinalReduction) {
-      auto [M, N, K, L] = problem_shape;
+      auto [M, N, K, L, T] = problem_shape;
       auto [tile_M, tile_N, tile_K] = CtaTileShapeMNK{};
       size_t tile_counters_offset = product(ceil_div(make_shape(M,N,L), make_shape(tile_M, tile_N))) * tile_M * sizeof(ElementCompute);
       tile_counters_offset = round_nearest(tile_counters_offset, MinWorkspaceAlignment);
@@ -1035,7 +1035,7 @@ public:
     }
 
     size_t workspace_size = 0;
-    auto [M, N, K, L] = problem_shape;
+    auto [M, N, K, L, T] = problem_shape;
     auto [tile_M, tile_N, tile_K] = CtaTileShapeMNK{};
 
     // Increment by size of reduction buffer
@@ -1052,7 +1052,7 @@ public:
   initialize_workspace(ProblemShape const& problem_shape, Arguments const& args, void* workspace, cudaStream_t stream,
     CudaHostAdapter* cuda_adapter = nullptr) {
     if constexpr (IsAtomic) {
-      auto [M, N, K, L] = problem_shape;
+      auto [M, N, K, L, T] = problem_shape;
       Layout mCol_layout = make_layout(make_shape(size<>(M),size<>(N),size<>(L)), args.dCol);
       if (args.ptr_col != nullptr) {
         return fill_workspace(args.ptr_col, ElementOutput(args.reduction_identity), cosize(mCol_layout), stream, cuda_adapter);
@@ -1060,7 +1060,7 @@ public:
       return Status::kSuccess;
     }
     else if constexpr (FinalReduction) {
-      auto [M, N, K, L] = problem_shape;
+      auto [M, N, K, L, T] = problem_shape;
       auto [tile_M, tile_N, tile_K] = CtaTileShapeMNK{};
       size_t tile_counters_offset = product(ceil_div(make_shape(M,N,L), make_shape(tile_M, tile_N))) * tile_M * sizeof(ElementCompute);
       tile_counters_offset = round_nearest(tile_counters_offset, MinWorkspaceAlignment);
@@ -1389,7 +1389,7 @@ public:
 
     // Partition output gmem and register tensors
     auto [tile_M, tile_N, tile_K] = args.tile_shape_mnk;
-    auto [M, N, K, L] = args.problem_shape_mnkl;
+    auto [M, N, K, L, T] = args.problem_shape_mnkl;
     auto [m, n, k, l] = args.tile_coord_mnkl;
 
     Tensor mCol = make_tensor(make_gmem_ptr<ElementOutput>(params.ptr_col), make_shape(M,N,L), params.dCol); // (M,N,L)

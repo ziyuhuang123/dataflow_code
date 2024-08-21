@@ -205,7 +205,7 @@ public:
     static_assert(cute::is_static<TileShape>::value);
     static_assert(cute::is_static<ClusterShape>::value);
 
-    auto problem_shape_mnkl = cute::append<4>(problem_shape, cute::Int<1>{});
+    auto problem_shape_mnkl = cute::append<5>(problem_shape, cute::Int<1>{});
     dim3 problem_blocks = get_tiled_cta_shape_mnl(problem_shape_mnkl, tile_shape, cluster_shape);
     uint32_t k_tile_per_output_tile = cute::size(cute::ceil_div(cute::shape<2>(problem_shape_mnkl), cute::shape<2>(TileShape{})));
 
@@ -325,7 +325,7 @@ public:
     KernelHardwareInfo hw_info,
     Arguments arguments) {
 
-    auto problem_shape_mnkl = cute::append<4>(problem_shape, cute::Int<1>{});
+    auto problem_shape_mnkl = cute::append<5>(problem_shape, cute::Int<1>{});
     dim3 problem_blocks = get_tiled_cta_shape_mnl(problem_shape_mnkl, tile_shape, cluster_shape);
 
     return Params::get_grid_shape(
@@ -548,7 +548,7 @@ public:
     uint32_t mma_warp_groups,
     const uint32_t epilogue_subtile = 1) {
 
-    auto problem_shape_mnkl = cute::append<4>(problem_shape, 1);
+    auto problem_shape_mnkl = cute::append<5>(problem_shape, 1);
 
     ClusterShape cluster_shape;
     TileShape tile_shape;
@@ -585,7 +585,7 @@ public:
     const uint32_t epilogue_subtile = 1,
     CudaHostAdapter* cuda_adapter = nullptr) {
 
-    auto problem_shape_mnkl = cute::append<4>(problem_shape, 1);
+    auto problem_shape_mnkl = cute::append<5>(problem_shape, 1);
 
     ClusterShape cluster_shape;
     TileShape tile_shape;

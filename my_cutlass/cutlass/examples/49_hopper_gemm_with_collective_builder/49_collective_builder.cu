@@ -153,13 +153,13 @@ struct Options {
   bool help;
   bool error;
 
-  int m, n, k, l;
+  int m, n, k, l, t;
   float alpha, beta;
 
   Options():
     help(false),
     error(false),
-    m(2048), n(2048), k(2048), l(1),
+    m(2048), n(2048), k(2048), l(1), t(4096),
     alpha(1.f), beta(0.f)
   { }
 
@@ -176,6 +176,7 @@ struct Options {
     cmd.get_cmd_line_argument("n", n, 2048);
     cmd.get_cmd_line_argument("k", k, 2048);
     cmd.get_cmd_line_argument("l", l, 1);
+    cmd.get_cmd_line_argument("t", t, 4096);
     cmd.get_cmd_line_argument("alpha", alpha, 1.f);
     cmd.get_cmd_line_argument("beta", beta, 0.f);
   }
@@ -192,6 +193,7 @@ struct Options {
       << "  --n=<int>                   Sets the N extent of the GEMM\n"
       << "  --k=<int>                   Sets the K extent of the GEMM\n"
       << "  --l=<int>                   Sets the L extent (batch count) of the GEMM\n"
+      << "  --t=<int>                   Sets the T extent  of the GEMM1, the width of GEMM1's weight\n"
       << "  --alpha=<f32>               Epilogue scalar alpha\n"
       << "  --beta=<f32>                Epilogue scalar beta\n\n";
 
@@ -361,26 +363,29 @@ struct ExampleRunner {
   //     cute::conditional_t<UseCustomEVT, CustomEVT, DefaultOperation>
   //   >::CollectiveOp;
 
+
+
+      // Element_gemm1_weight, Layout_gemm1_weight, Alignment_gemm1_weight,
+
+
   using CollectiveMainloop = typename cutlass::gemm::collective::CollectiveBuilder<
       cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
       ElementA, LayoutA, AlignmentA,
       ElementB, LayoutB, AlignmentB,
       ElementAccumulator,
       TileShape, ClusterShape,
-      cute::conditional_t<cute::is_same_v<StageCountType, cutlass::gemm::collective::StageCountAuto>,
-          cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(sizeof(typename CollectiveEpilogue::SharedStorage))>,
-          StageCountType>,
-      MainloopScheduleType
+      cute::conditional_t<cute::is_same_v<StageCountType,         cutlass::gemm::collective::StageCountAuto>, cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(sizeof(typename CollectiveEpilogue::SharedStorage))>, StageCountType>,
+      MainloopScheduleType, ElementD
     >::CollectiveOp;
-// 按理说上面都应该加入gemm1_weight的layout什么的。。。不过我偷懒。。暂时先借用B的一用吧。
+// 按理说上面都应该加入gemm1_weight的layout什么的。。。不过我偷懒。。暂时先借用B的一用吧。。。。好吧，最后还是加上_gemm1_weight了。  14
 
 
   using GemmKernel = cutlass::gemm::kernel::GemmUniversal<
-      Shape<int,int,int,int>,
+      Shape<int,int,int,int,int>,
       CollectiveMainloop,
       CollectiveEpilogue,
       TileSchedulerType
-  >;
+  >; // 这里增加了Shape后面一个int，为了GEMM1
 
   using Gemm = cutlass::gemm::device::GemmUniversalAdapter<GemmKernel>;
 
@@ -422,7 +427,7 @@ struct ExampleRunner {
   //
 
   bool verify(const ProblemShapeType& problem_size, float alpha, float beta) {
-    auto [M, N, K, L] = problem_size;
+    auto [M, N, K, L, T] = problem_size;
 
     cutlass::TensorRef ref_A(block_A.get(), Gemm::LayoutA::packed({M, K}));
     cutlass::TensorRef ref_B(block_B.get(), Gemm::LayoutB::packed({K, N}));
@@ -462,8 +467,8 @@ struct ExampleRunner {
 
   /// Initialize operands to be used in the GEMM and reference GEMM
   void initialize(const ProblemShapeType& problem_size) {
-    auto extended_problem_shape_MNKL = cute::append<4>(problem_size, 1); // 后面好像有很多assert。可能报错得消一消。。。extended_problem_shape_MNKL
-    auto problem_shape_MNKL = cute::append<5>(extended_problem_shape_MNKL, 4096);
+    auto problem_shape_MNKL = cute::append<5>(problem_size, 1); // 后面好像有很多assert。可能报错得消一消。。。extended_problem_shape_MNKL
+    // auto problem_shape_MNKL = cute::append<5>(extended_problem_shape_MNKL, 4096);
 
     auto [M, N, K, L, T] = problem_shape_MNKL;
 
@@ -471,30 +476,32 @@ struct ExampleRunner {
     stride_B = cutlass::make_cute_packed_stride(StrideB{}, cute::make_shape(N, K, L));
     stride_C = cutlass::make_cute_packed_stride(StrideC{}, cute::make_shape(M, N, L));
     stride_D = cutlass::make_cute_packed_stride(StrideD{}, cute::make_shape(M, N, L));
+    stride_gemm1_weight = cutlass::make_cute_packed_stride(Stride_gemm1_weight{}, cute::make_shape(N, T, L));
 
     block_A.reset(M * K * L);
     block_B.reset(K * N * L);
     block_C.reset(M * N * L);
     block_D.reset(M * N * L);
+    block_gemm1_weight.reset(N * T * L);
     block_ref_D.reset(M * N * L);
 
-    // initialize_block(block_A, seed + 2023);
-    // initialize_block(block_B, seed + 2022);
-    // initialize_block(block_C, seed + 2021);
+    initialize_block(block_A, seed + 2023);
+    initialize_block(block_B, seed + 2022);
+    initialize_block(block_C, seed + 2021);
+    initialize_block(block_gemm1_weight, seed + 2020);
 
+    // // 初始化 block_A (M x K)
+    // initialize_block_fixed_value<ElementA, LayoutA>(block_A, ElementA(1.0f), M, K);
 
-    // 初始化 block_A (M x K)
-    initialize_block_fixed_value<ElementA, LayoutA>(block_A, ElementA(1.0f), M, K);
+    // // 初始化 block_B (K x N)
+    // initialize_block_fixed_value<ElementB, LayoutB>(block_B, ElementB(1.0f), K, N);
 
-    // 初始化 block_B (K x N)
-    initialize_block_fixed_value<ElementB, LayoutB>(block_B, ElementB(1.0f), K, N);
-
-    // 初始化 block_C (M x N)
-    initialize_block_fixed_value<ElementC, LayoutC>(block_C, ElementC(0.0f), M, N);
+    // // 初始化 block_C (M x N)
+    // initialize_block_fixed_value<ElementC, LayoutC>(block_C, ElementC(0.0f), M, N);
   }
 
   bool run(const Options& options, const cutlass::KernelHardwareInfo& hw_info) {
-    ProblemShapeType problem_size = ProblemShapeType{options.m, options.n, options.k, options.l};
+    ProblemShapeType problem_size = ProblemShapeType{options.m, options.n, options.k, options.l, options.t};
 
     initialize(problem_size);
 
@@ -505,7 +512,12 @@ struct ExampleRunner {
       {{}, // epilogue.thread
        block_C.get(), stride_C, block_D.get(), stride_D},
       hw_info
-    };
+    };  // 对应cutlass/include/cutlass/gemm/kernel/sm90_gemm_tma_warpspecialized_cooperative.hpp的struct Arguments {
+
+
+// , block_gemm1_weight.get(), stride_gemm1_weight
+
+
 
     // Custom EVT fusions will have nested unnamed args, the structure of which
     // can be deduced from the type definition of the EVT.
@@ -695,6 +707,11 @@ int main(int argc, char const **args) {
   // Here, we override the scheduling policy to use stream-K problem decomposition atop the cooperative
   // warp-specialized scheduling policy. This kernel continues to leverage persistent thread blocks
   // as well aso TMA in both the mainloop and epilogue.
+
+
+
+
+
   ExampleRunner<
     cutlass::gemm::KernelTmaWarpSpecializedCooperative,
     cutlass::epilogue::TmaWarpSpecializedCooperative,
@@ -702,6 +719,10 @@ int main(int argc, char const **args) {
     cutlass::gemm::StreamKScheduler> ws_cooperative_stream_k_schedule_auto_stage_runner;
   passed = ws_cooperative_stream_k_schedule_auto_stage_runner.run(options, hw_info);
   print_result("Cooperative warp-specialized TMA schedule using stream-K with automatically-selected stage count", passed);
+
+
+
+
 
   // // Here, we override the fusion operation to use a customized EVT fusion, in addition to the previous schedule overrides
   // ExampleRunner<

@@ -311,8 +311,10 @@ public:
     auto cta_m = cute::size(cute::ceil_div(cute::shape<0>(problem_shape_mnkl), cute::shape<0>(cta_shape)));
     auto cta_n = cute::size(cute::ceil_div(cute::shape<1>(problem_shape_mnkl), cute::shape<1>(cta_shape)));
 
+    // 这里的problem_shape_mnkl是五维，最后一维是1。
+
     return Params::get_tiled_cta_shape_mnl(
-      to_gemm_coord(problem_shape_mnkl),
+      to_gemm_coord(cute::take<0, 4>(problem_shape_mnkl)),
       to_gemm_coord(cluster_shape),
       cta_m, cta_n
     );
@@ -343,10 +345,23 @@ public:
     Arguments arguments,
     bool truncate_by_problem_size=true) {
 
-    auto problem_shape_mnkl = cute::append<4>(problem_shape_mnk, cute::Int<1>{});
+    auto problem_shape_mnkl = cute::append<5>(problem_shape_mnk, cute::Int<1>{});
+
+    static_assert(cute::rank(decltype(problem_shape_mnkl){}) <= 4, "Rank of problem_shape_mnkl exceeds 4 after append<5>.");
+
+
     dim3 problem_blocks = get_tiled_cta_shape_mnl(problem_shape_mnkl, cta_shape, cluster_shape);
 
-    return Params::get_grid_shape(
+    // return Params::get_grid_shape(
+    //   problem_blocks,
+    //   to_gemm_coord(cluster_shape),
+    //   hw_info,
+    //   arguments.max_swizzle_size,
+    //   arguments.raster_order,
+    //   /* truncate_by_problem_size = */true
+    // );
+
+    dim3 grid_shape = Params::get_grid_shape(
       problem_blocks,
       to_gemm_coord(cluster_shape),
       hw_info,
@@ -354,6 +369,11 @@ public:
       arguments.raster_order,
       /* truncate_by_problem_size = */true
     );
+
+    // 打印 grid_shape 的值
+    printf("cutlass/include/cutlass/gemm/kernel/static_tile_scheduler.hpp Grid Shape: x = %d, y = %d, z = %d\n", grid_shape.x, grid_shape.y, grid_shape.z); // 最奇怪的是，这一句完全没有被打印出来。。。这个函数可能根本没被用。我注意到在threadblock_swizzle
+
+    return grid_shape;
   }
 
   // Given the inputs, computes the physical grid we should launch.
@@ -367,7 +387,7 @@ public:
     ClusterShape cluster_shape,
     KernelHardwareInfo hw_info) {
 
-    auto problem_shape_mnkl = cute::append<4>(problem_shape_mnk, cute::Int<1>{});
+    auto problem_shape_mnkl = cute::append<5>(problem_shape_mnk, cute::Int<1>{});
     dim3 problem_blocks = get_tiled_cta_shape_mnl(problem_shape_mnkl, cta_shape, cluster_shape);
 
     Arguments args{};

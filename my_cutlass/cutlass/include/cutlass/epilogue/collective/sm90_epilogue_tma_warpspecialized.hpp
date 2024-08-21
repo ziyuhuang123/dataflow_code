@@ -302,8 +302,9 @@ public:
 
 
     // Optionally append 1s until problem shape is rank-4 in case its is only rank-3 (MNK)
-    auto problem_shape_MNKL = append<4>(problem_shape, 1);
-    auto [M, N, K, L] = problem_shape_MNKL;
+    // auto problem_shape_MNKL = append<4>(problem_shape, 1);  // 原先的
+    auto problem_shape_MNKL = append<5>(problem_shape, 1);
+    auto [M, N, K, L, T] = problem_shape_MNKL;
 
     uint32_t transaction_bytes = TmaTransactionBytes;
     typename Params::TMA_C tma_load_c = {};
@@ -352,8 +353,8 @@ public:
   can_implement(
       ProblemShape const& problem_shape,
       [[maybe_unused]] Arguments const& args) {
-    auto problem_shape_MNKL = append<4>(problem_shape, 1);
-    auto [M,N,K,L] = problem_shape_MNKL;
+    auto problem_shape_MNKL = append<5>(problem_shape, 1);
+    auto [M,N,K,L,T] = problem_shape_MNKL;
     auto shape = cute::make_shape(M,N,L);
 
     bool implementable = true;
@@ -454,7 +455,7 @@ public:
     using namespace cute;
 
     // Indexing variables
-    auto [M, N, K, L] = problem_shape_mnkl;
+    auto [M, N, K, L, T] = problem_shape_mnkl;
     auto [m_coord, n_coord, k_coord, l_coord] = tile_coord_mnkl;
 
     // The tma tensor C under im2col mode only has two modes (M, N) which
@@ -578,13 +579,14 @@ public:
 
     static_assert(is_rmem<AccEngine>::value, "Accumulator must be RF resident.");
     static_assert(rank(AccLayout{}) == 3, "Accumulator must be MMA-partitioned: (MMA,MMA_M,MMA_N)");
-    static_assert(rank(ProblemShapeMNKL{}) == 4, "ProblemShapeMNKL must be rank 4");
+    // static_assert(rank(ProblemShapeMNKL{}) == 4, "ProblemShapeMNKL must be rank 4");
+    static_assert(rank(ProblemShapeMNKL{}) == 5, "ProblemShapeMNKL must be rank 4"); // GEMM1导致必须要有5个
     static_assert(is_static<TileShapeMNK>::value, "TileShapeMNK must be static");
     static_assert(rank(TileShapeMNK{}) == 3, "TileShapeMNK must be rank 3");
     static_assert(rank(TileCoordMNKL{}) == 4, "TileCoordMNKL must be rank 4");
 
     // Indexing variables
-    auto [M, N, K, L] = problem_shape_mnkl;
+    auto [M, N, K, L, T] = problem_shape_mnkl;
     auto [m_coord, n_coord, k_coord, l_coord] = tile_coord_mnkl;
 
     // The tma tensor D under im2col mode only has two modes (M, N) which

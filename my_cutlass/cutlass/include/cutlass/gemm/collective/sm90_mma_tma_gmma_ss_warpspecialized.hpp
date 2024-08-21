@@ -77,6 +77,7 @@ struct CollectiveMma<
     StrideA_,
     ElementB_,
     StrideB_,
+
     TiledMma_,
     GmemTiledCopyA_,
     SmemLayoutAtomA_,
@@ -87,6 +88,10 @@ struct CollectiveMma<
     SmemCopyAtomB_,
     TransformB_>
 {
+  // class Element_gemm1_weight_,
+  // class Stride_gemm1_weight_,
+    // Element_gemm1_weight_,
+    // Stride_gemm1_weight_,
   //
   // Type Aliases
   //
@@ -96,6 +101,8 @@ struct CollectiveMma<
   using StrideA = StrideA_;
   using ElementB = ElementB_;
   using StrideB = StrideB_;
+  // using Element_gemm1_weight = Element_gemm1_weight_;
+  // using Stride_gemm1_weight = Stride_gemm1_weight_;
   using TiledMma = TiledMma_;
   using ElementAccumulator = typename TiledMma::ValTypeC;
   using GmemTiledCopyA = GmemTiledCopyA_;
@@ -187,6 +194,9 @@ struct CollectiveMma<
     uint32_t mma_promotion_interval = 4;
   };
 
+    // Element_gemm1_weight const* ptr_gemm1_weight;
+    // Stride_gemm1_weight d_gemm1_weight;
+
   // Device side kernel params
   struct Params {
     // Assumption: StrideA is congruent with Problem_MK
@@ -225,8 +235,8 @@ struct CollectiveMma<
     (void) workspace;
 
     // Optionally append 1s until problem shape is rank-4 (MNKL), in case it is only rank-3 (MNK)
-    auto problem_shape_MNKL = append<4>(problem_shape, 1);
-    auto [M,N,K,L] = problem_shape_MNKL;
+    auto problem_shape_MNKL = append<5>(problem_shape, 1);
+    auto [M,N,K,L,T] = problem_shape_MNKL;
 
     auto ptr_A = reinterpret_cast<InternalElementA const*>(args.ptr_A);
     auto ptr_B = reinterpret_cast<InternalElementB const*>(args.ptr_B);
@@ -265,8 +275,8 @@ struct CollectiveMma<
       ProblemShape const& problem_shape,
       [[maybe_unused]] Arguments const& args) {
     constexpr int tma_alignment_bits = 128;
-    auto problem_shape_MNKL = append<4>(problem_shape, 1);
-    auto [M,N,K,L] = problem_shape_MNKL;
+    auto problem_shape_MNKL = append<5>(problem_shape, 1);
+    auto [M,N,K,L,T] = problem_shape_MNKL;
     
     bool implementable = true;
     constexpr int min_tma_aligned_elements_A = tma_alignment_bits / cutlass::sizeof_bits<ElementA>::value;
@@ -306,7 +316,7 @@ struct CollectiveMma<
   load_init(ProblemShape_MNKL const& problem_shape_MNKL, Params const& mainloop_params) const {
     using X = Underscore;
     // Separate out problem shape for convenience
-    auto [M,N,K,L] = problem_shape_MNKL;
+    auto [M,N,K,L,T] = problem_shape_MNKL;
 
     // TMA requires special handling of strides to deal with coord codomain mapping
     // Represent the full tensors -- get these from TMA

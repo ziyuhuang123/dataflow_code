@@ -32,6 +32,31 @@
 
 #include "cutlass/gemm/collective/builders/sm90_common.inl"
 
+
+// 为了能够引入cutlass::half_t而加的冗余的include。但是也只是暂时debug而加。
+#include <iostream>
+#include "cute/tensor.hpp"
+#include "cutlass/cutlass.h"
+#include "cutlass/tensor_ref.h"
+#include "cutlass/epilogue/collective/default_epilogue.hpp"
+#include "cutlass/epilogue/thread/linear_combination.h"
+#include "cutlass/gemm/dispatch_policy.hpp"
+#include "cutlass/gemm/collective/collective_builder.hpp"
+#include "cutlass/epilogue/collective/collective_builder.hpp"
+#include "cutlass/gemm/device/gemm_universal_adapter.h"
+#include "cutlass/gemm/kernel/gemm_universal.hpp"
+#include "cutlass/gemm/kernel/tile_scheduler.hpp"
+
+#include "cutlass/util/command_line.h"
+#include "cutlass/util/distribution.h"
+#include "cutlass/util/host_tensor.h"
+#include "cutlass/util/packed_stride.hpp"
+#include "cutlass/util/tensor_view_io.h"
+#include "cutlass/util/reference/device/gemm_complex.h"
+#include "cutlass/util/reference/device/tensor_compare.h"
+#include "cutlass/util/reference/device/tensor_fill.h"
+
+
 // SM90 Collective Builders should be used only starting CUDA 12.0
 #if (__CUDACC_VER_MAJOR__ >= 12)
 #define CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
@@ -150,6 +175,14 @@ is_warpspecialized_transpose_B(){
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 // GMMA_TMA_WS_SS
+
+  // class Element_gemm1_weight,
+  // class GmemLayout_gemm1_weight_Tag,
+  // class Alignment_gemm1_weight,
+  //   Element_gemm1_weight,
+  //   GmemLayout_gemm1_weight_Tag,
+    // Alignment_gemm1_weight,
+
 template <
   class ElementA,
   class GmemLayoutATag,
@@ -161,7 +194,8 @@ template <
   class TileShape_MNK,
   class ClusterShape_MNK,
   class StageCountType,
-  class KernelScheduleType
+  class KernelScheduleType,
+  class ElementD
 >
 struct CollectiveBuilder<
     arch::Sm90,
@@ -171,19 +205,20 @@ struct CollectiveBuilder<
     AlignmentA,
     ElementB,
     GmemLayoutBTag,
-    AlignmentB,
+    AlignmentB, 
     ElementAccumulator,
     TileShape_MNK,
     ClusterShape_MNK,
     StageCountType,
     KernelScheduleType,
+    ElementD,
     cute::enable_if_t<
       (cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecialized> ||
        cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedPingpong> ||
        cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperative> ||
        cute::is_same_v<KernelScheduleType, KernelPtrArrayTmaWarpSpecializedCooperative>) &&
        not detail::is_use_rmem_A<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>()>
-> {
+> { // 15
   static_assert(is_static<TileShape_MNK>::value);
   static_assert(is_static<ClusterShape_MNK>::value);
 #ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
@@ -234,768 +269,777 @@ struct CollectiveBuilder<
   using CollectiveOp = CollectiveMma<
       DispatchPolicy,
       TileShape_MNK,
+
       ElementA,
       TagToStrideA_t<GmemLayoutATag>,
       ElementB,
       TagToStrideB_t<GmemLayoutBTag>,
+
+
       TiledMma,
       GmemTiledCopyA,
       SmemLayoutAtomA,
       SmemCopyAtomA,
+
       cute::identity,
       GmemTiledCopyB,
       SmemLayoutAtomB,
       SmemCopyAtomB,
+
       cute::identity
     >;
+  // TagToStrideB_t这里为什么区分A和B我也想不明白。但是毕竟weight和B一样，都是权重，所以暂时先按B来吧。
+
+      // Element_gemm1_weight,
+      // TagToStrideB_t<GmemLayout_gemm1_weight_Tag>,
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-// GMMA_TMA_WS_RS
-template <
-  class ElementA,
-  class GmemLayoutATag,
-  int AlignmentA,
-  class ElementB,
-  class GmemLayoutBTag,
-  int AlignmentB,
-  class ElementAccumulator,
-  class TileShape_MNK,
-  class ClusterShape_MNK,
-  class StageCountType,
-  class KernelScheduleType
->
-struct CollectiveBuilder<
-    arch::Sm90,
-    arch::OpClassTensorOp,
-    ElementA,
-    GmemLayoutATag,
-    AlignmentA,
-    ElementB,
-    GmemLayoutBTag,
-    AlignmentB,
-    ElementAccumulator,
-    TileShape_MNK,
-    ClusterShape_MNK,
-    StageCountType,
-    KernelScheduleType,
-    cute::enable_if_t<
-      (cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecialized> ||
-       cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedPingpong> ||
-       cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperative>) &&
-      detail::is_use_rmem_A<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>()> 
-> {
-  static_assert(is_static<TileShape_MNK>::value);
-  static_assert(is_static<ClusterShape_MNK>::value);
-  static_assert(detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, detail::tma_alignment_bytes>(),
-                "Should meet TMA alignment requirement\n");
-#ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
-  static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
-#endif
-  static constexpr cute::GMMA::Major GmmaMajorA = detail::gmma_rs_tag_to_major_A<GmemLayoutATag>();
-  static constexpr cute::GMMA::Major GmmaMajorB = detail::gmma_rs_tag_to_major_B<GmemLayoutBTag>();
-  static constexpr bool SwapAB = detail::is_swapAB<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>();
-  static constexpr bool IsWarpSpecializedTransposeB = detail::is_warpspecialized_transpose_B<
-      ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag, KernelScheduleType>();
-
-  // For fp32 types, map to tf32 MMA value type
-  using ElementAMma = cute::conditional_t<cute::is_same_v<ElementA, float>, tfloat32_t, ElementA>;
-  using ElementBMma = cute::conditional_t<cute::is_same_v<ElementB, float>, tfloat32_t, ElementB>;
-
-  using AtomLayoutMNK = cute::conditional_t<cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperative>,
-      Layout<Shape<_2,_1,_1>>, Layout<Shape<_1,_1,_1>>>;
-
-  using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::rs_op_selector<
-      ElementAMma, ElementBMma, ElementAccumulator, TileShape_MNK, GMMA::Major::K, GMMA::Major::K>(), AtomLayoutMNK{}));
-
-  using GmemTiledCopyA = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<1>(ClusterShape_MNK{})));
-  using GmemTiledCopyB = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<0>(ClusterShape_MNK{})));
-
-  using SmemLayoutAtomA = decltype(detail::rs_smem_selector<GmmaMajorA, ElementAMma,
-      decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{})), IsWarpSpecializedTransposeB>());
-  using SmemLayoutAtomB = decltype(detail::rs_smem_selector<GmmaMajorB, ElementBMma,
-      decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{})), IsWarpSpecializedTransposeB>());
-
-  static constexpr int PipelineStages = detail::compute_stage_count_or_override<detail::sm90_smem_capacity_bytes,
-      ElementAMma, ElementBMma, TileShape_MNK>(StageCountType{});
-
-  using DispatchPolicy = MainloopSm90TmaGmmaRmemAWarpSpecialized<
-      PipelineStages, ClusterShape_MNK, KernelScheduleType>;
-
-  using SmemCopyAtomA = cute::conditional_t<SwapAB, void, Copy_Atom<cute::DefaultCopy, ElementA>>;
-  using SmemCopyAtomB = cute::conditional_t<SwapAB, Copy_Atom<cute::DefaultCopy, ElementB>, void>;
-
-  using CollectiveOp = CollectiveMma<
-      DispatchPolicy,
-      TileShape_MNK,
-      ElementA,
-      TagToStrideA_t<GmemLayoutATag>,
-      ElementB,
-      TagToStrideB_t<GmemLayoutBTag>,
-      TiledMma,
-      GmemTiledCopyA,
-      SmemLayoutAtomA,
-      SmemCopyAtomA,
-      cute::identity,
-      GmemTiledCopyB,
-      SmemLayoutAtomB,
-      SmemCopyAtomB,
-      cute::identity
-    >;
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-// GMMA_TMA_WS_RS Mixed Scaled GEMM
-template <
-  class ElementPairA_,
-  class GmemLayoutATag_,
-  int AlignmentA,
-  class ElementPairB_,
-  class GmemLayoutBTag_,
-  int AlignmentB,
-  class ElementAccumulator,
-  class TileShape_MNK,
-  class ClusterShape_MNK,
-  class StageCountType,
-  class KernelScheduleType
->
-struct CollectiveBuilder<
-    arch::Sm90,
-    arch::OpClassTensorOp,
-    ElementPairA_,
-    GmemLayoutATag_,
-    AlignmentA,
-    ElementPairB_,
-    GmemLayoutBTag_,
-    AlignmentB,
-    ElementAccumulator,
-    TileShape_MNK,
-    ClusterShape_MNK,
-    StageCountType,
-    KernelScheduleType,
-    cute::enable_if_t<
-      (cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedMixedInput> ||
-       cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedPingpongMixedInput> ||
-       cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperativeMixedInput>)>
-> {
-
-private:
-  using ScaleA = detail::deduce_mixed_width_dtype_t<1, ElementPairA_>;
-  using ScaleB = detail::deduce_mixed_width_dtype_t<1, ElementPairB_>;
-  using ZeroA = detail::deduce_mixed_width_dtype_t<2, ElementPairA_>;
-  using ZeroB = detail::deduce_mixed_width_dtype_t<2, ElementPairB_>;
-  static constexpr bool NeitherIsTuple = !cute::is_tuple<ElementPairA_>::value && !cute::is_tuple<ElementPairB_>::value;
-
-public:
-  using ElementA = detail::deduce_mixed_width_dtype_t<0, ElementPairA_>;
-  using ElementB = detail::deduce_mixed_width_dtype_t<0, ElementPairB_>;
-  static_assert(cute::is_tuple<ElementPairA_>::value ^ cute::is_tuple<ElementPairB_>::value ||
-               (NeitherIsTuple && (sizeof_bits<ElementA>::value != sizeof_bits<ElementB>::value)), 
-    "Either A OR B must be a tuple or the widths of A and B must be different.");
-
-  static constexpr bool IsANarrow = sizeof_bits<ElementA>::value < sizeof_bits<ElementB>::value;
-
-  using GmemLayoutATag = GmemLayoutATag_;
-  using GmemLayoutBTag = GmemLayoutBTag_;
-
-  using ElementPairA = cute::conditional_t<IsANarrow && NeitherIsTuple, cute::tuple<ElementA>, ElementPairA_>;
-  using ElementPairB = cute::conditional_t<!IsANarrow && NeitherIsTuple, cute::tuple<ElementB>, ElementPairB_>;
-
-  static constexpr bool IsATransformed = cute::is_tuple<ElementPairA>::value;
-  using ElementScale = cute::conditional_t<IsATransformed, ScaleA, ScaleB>;
-  using ElementZero = cute::conditional_t<IsATransformed, ZeroA, ZeroB>;
-
-  static_assert(is_static<TileShape_MNK>::value);
-  static_assert(is_static<ClusterShape_MNK>::value);
-  static_assert(detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, detail::tma_alignment_bytes>(),
-                "Should meet TMA alignment requirement\n");
-#ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
-  static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
-#endif
-  static constexpr cute::GMMA::Major GmmaMajorA = detail::gmma_rs_tag_to_major_A<GmemLayoutATag>();
-  static constexpr cute::GMMA::Major GmmaMajorB = detail::gmma_rs_tag_to_major_B<GmemLayoutBTag>();
-  static constexpr bool IsWarpSpecializedTransposeB = detail::is_warpspecialized_transpose_B<
-      ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag, KernelScheduleType>();
-  static_assert(!IsWarpSpecializedTransposeB, "Mixed input GEMM does not support WS transpose B.");
-
-  // If A is scaled, then we don't need to swap. Otherwise, we must ensure B goes to RF and we must swap the operands.
-  static constexpr bool SwapAB = !IsATransformed;
-
-  // When we relax the above assertion, we must handle setting the tile mma GmmaMajorB correctly.
-  static constexpr cute::GMMA::Major TiledMmaGmmaMajorB = SwapAB ? GmmaMajorA : GmmaMajorB;
-
-  using ElementMma = cute::conditional_t<IsATransformed, ElementB, ElementA>;
-  using AtomLayoutMNK = cute::conditional_t<cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperativeMixedInput>,
-      Layout<Shape<_2,_1,_1>>, Layout<Shape<_1,_1,_1>>>;
-
-  using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::rs_op_selector<
-      ElementMma, ElementMma, ElementAccumulator, TileShape_MNK, GMMA::Major::K, TiledMmaGmmaMajorB>(), AtomLayoutMNK{}));
-
-  using GmemTiledCopyA = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<1>(ClusterShape_MNK{})));
-  using GmemTiledCopyB = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<0>(ClusterShape_MNK{})));
-
-  using SmemLayoutAtomA = decltype(detail::rs_smem_selector<GmmaMajorA, ElementA,
-      decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{})), IsWarpSpecializedTransposeB>());
-  using SmemLayoutAtomB = decltype(detail::rs_smem_selector<GmmaMajorB, ElementB,
-      decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{})), IsWarpSpecializedTransposeB>());
-
-  using RealElementA = cute::conditional_t<SwapAB, ElementB, ElementA>;
-  using RealElementB = cute::conditional_t<SwapAB, ElementA, ElementB>;
-  static constexpr int PipelineStages = detail::compute_stage_count_or_override_single_affine_transformed_input<detail::sm90_smem_capacity_bytes,
-      RealElementA, RealElementB, ElementScale, ElementZero, TileShape_MNK>(StageCountType{});
-
-  using SmemCopyAtomA = cute::conditional_t<SwapAB, void, Copy_Atom<cute::DefaultCopy, ElementA>>;
-  using SmemCopyAtomB = cute::conditional_t<SwapAB, Copy_Atom<cute::DefaultCopy, ElementB>, void>;
-
-  using DispatchPolicy = MainloopSm90TmaGmmaRmemAWarpSpecializedMixedInput<PipelineStages, ClusterShape_MNK, KernelScheduleType>;
-
-  // We pack the scale data with the operand that will be optionally scaled and converted before MMA.
-  using StrideA = TagToStrideA_t<GmemLayoutATag>;
-  using StrideB = TagToStrideB_t<GmemLayoutBTag>;
-
-  using CollectiveOp = CollectiveMma<
-      DispatchPolicy,
-      TileShape_MNK,
-      ElementPairA,
-      StrideA,
-      ElementPairB,
-      StrideB,
-      TiledMma,
-      GmemTiledCopyA,
-      SmemLayoutAtomA,
-      SmemCopyAtomA,
-      cute::identity,
-      GmemTiledCopyB,
-      SmemLayoutAtomB,
-      SmemCopyAtomB,
-      cute::identity
-    >;
-
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-// GMMA_TMA_WS_FP8_FAST_ACCUM_SS
-template <
-  class ElementA,
-  class GmemLayoutATag,
-  int AlignmentA,
-  class ElementB,
-  class GmemLayoutBTag,
-  int AlignmentB,
-  class ElementAccumulator,
-  class TileShape_MNK,
-  class ClusterShape_MNK,
-  class StageCountType,
-  class KernelScheduleType
->
-struct CollectiveBuilder<
-    arch::Sm90,
-    arch::OpClassTensorOp,
-    ElementA,
-    GmemLayoutATag,
-    AlignmentA,
-    ElementB,
-    GmemLayoutBTag,
-    AlignmentB,
-    ElementAccumulator,
-    TileShape_MNK,
-    ClusterShape_MNK,
-    StageCountType,
-    KernelScheduleType,
-    cute::enable_if_t<
-      cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedFP8FastAccum> ||
-      cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedPingpongFP8FastAccum> ||
-      cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperativeFP8FastAccum> ||
-       cute::is_same_v<KernelScheduleType, KernelPtrArrayTmaWarpSpecializedCooperativeFP8FastAccum>>
-> {
-  static_assert(is_static<TileShape_MNK>::value);
-  static_assert(is_static<ClusterShape_MNK>::value);
-  static_assert(detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, detail::tma_alignment_bytes>(),
-                "Not meet TMA alignment requirement yet\n");
-  static_assert(detail::is_input_fp8<ElementA, ElementB>(),
-                "Only FP8 datatypes are compatible with these kernel schedules\n");
-  // Dispatch TN fp8 kernels only to TMA warp specialized FP8 builder
-  static_assert(!detail::is_use_rmem_A<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>(),
-                 "Not supported for fp8 non-TN warp specialized kernels yet\n");
-#ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
-  static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
-#endif
-
-  static constexpr cute::GMMA::Major GmmaMajorA = detail::gmma_ss_tag_to_major_A<ElementA, GmemLayoutATag>();
-  static constexpr cute::GMMA::Major GmmaMajorB = detail::gmma_ss_tag_to_major_B<ElementB, GmemLayoutBTag>();
-
-  static constexpr bool IsArrayOfPointersGemm = (cute::is_same_v<KernelScheduleType, KernelPtrArrayTmaWarpSpecializedCooperativeFP8FastAccum>);
-  using AtomLayoutMNK = cute::conditional_t<cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperativeFP8FastAccum> ||
-                                            IsArrayOfPointersGemm,
-      Layout<Shape<_2,_1,_1>>, Layout<Shape<_1,_1,_1>>>;
-
-  using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::ss_op_selector<
-      ElementA, ElementB, ElementAccumulator, TileShape_MNK, GmmaMajorA, GmmaMajorB>(), AtomLayoutMNK{}));
-
-  using GmemTiledCopyA = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<1>(ClusterShape_MNK{})));
-  using GmemTiledCopyB = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<0>(ClusterShape_MNK{})));
-
-  using SmemLayoutAtomA = decltype(detail::ss_smem_selector<
-      GmmaMajorA, ElementA, decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
-  using SmemLayoutAtomB = decltype(detail::ss_smem_selector<
-      GmmaMajorB, ElementB, decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
-
-  static constexpr int PipelineStages = detail::compute_stage_count_or_override<detail::sm90_smem_capacity_bytes,
-      ElementA, ElementB, TileShape_MNK>(StageCountType{});
-  using DispatchPolicy = cute::conditional_t<IsArrayOfPointersGemm,
-      MainloopSm90ArrayTmaGmmaWarpSpecialized<PipelineStages, ClusterShape_MNK, KernelScheduleType>,
-      MainloopSm90TmaGmmaWarpSpecialized<PipelineStages, ClusterShape_MNK, KernelScheduleType>>;
-
-  using SmemCopyAtomA = void;
-  using SmemCopyAtomB = void;
-
-  using CollectiveOp = CollectiveMma<
-      DispatchPolicy,
-      TileShape_MNK,
-      ElementA,
-      TagToStrideA_t<GmemLayoutATag>,
-      ElementB,
-      TagToStrideB_t<GmemLayoutBTag>,
-      TiledMma,
-      GmemTiledCopyA,
-      SmemLayoutAtomA,
-      SmemCopyAtomA,
-      cute::identity,
-      GmemTiledCopyB,
-      SmemLayoutAtomB,
-      SmemCopyAtomB,
-      cute::identity
-    >;
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-// GMMA_TMA_SS
-template <
-  class ElementA,
-  class GmemLayoutATag,
-  int AlignmentA,
-  class ElementB,
-  class GmemLayoutBTag,
-  int AlignmentB,
-  class ElementAccumulator,
-  class TileShape_MNK,
-  class ClusterShape_MNK,
-  class StageCountType,
-  class KernelScheduleType
->
-struct CollectiveBuilder<
-    arch::Sm90,
-    arch::OpClassTensorOp,
-    ElementA,
-    GmemLayoutATag,
-    AlignmentA,
-    ElementB,
-    GmemLayoutBTag,
-    AlignmentB,
-    ElementAccumulator,
-    TileShape_MNK,
-    ClusterShape_MNK,
-    StageCountType,
-    KernelScheduleType,
-    cute::enable_if_t<cute::is_same_v<KernelScheduleType, KernelTma> &&
-                     not detail::is_use_rmem_A<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>()>
-> {
-  static_assert(is_static<TileShape_MNK>::value);
-  static_assert(is_static<ClusterShape_MNK>::value);
-  static_assert(detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, detail::tma_alignment_bytes>(),
-                "Should meet TMA alignment requirement\n");
-#ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
-  static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
-#endif
-
-  // For fp32 types, map to tf32 MMA value type
-  using ElementAMma = cute::conditional_t<cute::is_same_v<ElementA, float>, tfloat32_t, ElementA>;
-  using ElementBMma = cute::conditional_t<cute::is_same_v<ElementB, float>, tfloat32_t, ElementB>;
-
-  static constexpr cute::GMMA::Major GmmaMajorA = detail::gmma_ss_tag_to_major_A<ElementAMma, GmemLayoutATag>();
-  static constexpr cute::GMMA::Major GmmaMajorB = detail::gmma_ss_tag_to_major_B<ElementBMma, GmemLayoutBTag>();
-
-  using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::ss_op_selector<
-      ElementAMma, ElementBMma, ElementAccumulator, TileShape_MNK, GmmaMajorA, GmmaMajorB>()));
-
-  using GmemTiledCopyA = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<1>(ClusterShape_MNK{})));
-  using GmemTiledCopyB = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<0>(ClusterShape_MNK{})));
-
-  using SmemLayoutAtomA = decltype(detail::ss_smem_selector<
-      GmmaMajorA, ElementAMma, decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
-  using SmemLayoutAtomB = decltype(detail::ss_smem_selector<
-      GmmaMajorB, ElementBMma, decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
-
-  static constexpr int PipelineStages = detail::compute_stage_count_or_override<detail::sm90_smem_capacity_bytes,
-      ElementAMma, ElementBMma, TileShape_MNK>(StageCountType{});
-  using DispatchPolicy = MainloopSm90TmaGmma<PipelineStages, ClusterShape_MNK>;
-
-  using SmemCopyAtomA = void;
-  using SmemCopyAtomB = void;
-
-  using CollectiveOp = CollectiveMma<
-      DispatchPolicy,
-      TileShape_MNK,
-      ElementA,
-      TagToStrideA_t<GmemLayoutATag>,
-      ElementB,
-      TagToStrideB_t<GmemLayoutBTag>,
-      TiledMma,
-      GmemTiledCopyA,
-      SmemLayoutAtomA,
-      SmemCopyAtomA,
-      cute::identity,
-      GmemTiledCopyB,
-      SmemLayoutAtomB,
-      SmemCopyAtomB,
-      cute::identity
-    >;
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-// GMMA_CpAsync
-template <
-  class ElementA,
-  class GmemLayoutATag,
-  int AlignmentA,
-  class ElementB,
-  class GmemLayoutBTag,
-  int AlignmentB,
-  class ElementAccumulator,
-  class TileShape_MNK,
-  class ClusterShape_MNK,
-  class StageCountType,
-  class KernelScheduleType
->
-struct [[deprecated("Use one of KernelCpAsyncWarpSpecialized schedules instead")]]
-CollectiveBuilder<
-    arch::Sm90,
-    arch::OpClassTensorOp,
-    ElementA,
-    GmemLayoutATag,
-    AlignmentA,
-    ElementB,
-    GmemLayoutBTag,
-    AlignmentB,
-    ElementAccumulator,
-    TileShape_MNK,
-    ClusterShape_MNK,
-    StageCountType,
-    KernelScheduleType,
-    cute::enable_if_t<
-      cute::is_same_v<KernelScheduleType, KernelMultistage>>
-> {
-  // Map to warp-specialized kernels for better performance
-  using CollectiveOp = typename CollectiveBuilder<
-    arch::Sm90,
-    arch::OpClassTensorOp,
-    ElementA,
-    GmemLayoutATag,
-    AlignmentA,
-    ElementB,
-    GmemLayoutBTag,
-    AlignmentB,
-    ElementAccumulator,
-    TileShape_MNK,
-    ClusterShape_MNK,
-    StageCountType,
-    KernelCpAsyncWarpSpecialized
-  >::CollectiveOp;
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-// GMMA_CpAsync_WS_SS
-template <
-  class ElementA,
-  class GmemLayoutATag,
-  int   AlignmentA,
-  class ElementB,
-  class GmemLayoutBTag,
-  int   AlignmentB,
-  class ElementAccumulator,
-  class TileShape_MNK,
-  class ClusterShape_MNK,
-  class StageCountType,
-  class KernelScheduleType
->
-struct CollectiveBuilder<
-    arch::Sm90,
-    arch::OpClassTensorOp,
-    ElementA,
-    GmemLayoutATag,
-    AlignmentA,
-    ElementB,
-    GmemLayoutBTag,
-    AlignmentB,
-    ElementAccumulator,
-    TileShape_MNK,
-    ClusterShape_MNK,
-    StageCountType,
-    KernelScheduleType,
-    cute::enable_if_t<
-      (cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecialized> ||
-       cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecializedCooperative> ||
-       cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecializedPingpong>) &&
-      not detail::is_use_rmem_A<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>()
-    >
-> {
-  static_assert(is_static<TileShape_MNK>::value);
-  static_assert(is_static<ClusterShape_MNK>::value);
-#ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
-  static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
-#endif
-
-  // For fp32 types, map to tf32 MMA value type
-  using ElementAMma = cute::conditional_t<cute::is_same_v<ElementA, float>, tfloat32_t, ElementA>;
-  using ElementBMma = cute::conditional_t<cute::is_same_v<ElementB, float>, tfloat32_t, ElementB>;
-
-  static_assert(detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, detail::cp_async_min_alignment_bytes>(),
-                "Minimum alignment required for cp.async is 4B.");
-
-  static constexpr cute::GMMA::Major GmmaMajorA = detail::gmma_ss_tag_to_major_A<ElementA, GmemLayoutATag>();
-  static constexpr cute::GMMA::Major GmmaMajorB = detail::gmma_ss_tag_to_major_B<ElementB, GmemLayoutBTag>();
-
-  using AtomLayoutMNK = cute::conditional_t<cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecializedCooperative>,
-      Layout<Shape<cute::Int<(size<0>(TileShape_MNK{}) < 128) ? 1 : 2>,_1,_1>>, Layout<Shape<_1,_1,_1>>>;
-
-  using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::ss_op_selector<
-      ElementAMma, ElementBMma, ElementAccumulator, TileShape_MNK, GmmaMajorA, GmmaMajorB>(), AtomLayoutMNK{}));
-
-  static constexpr int NumLoadWarpGroups = cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecialized> ? 2 : 1;
-
-  using GmemTiledCopyA = decltype(detail::make_cp_async_gmem_tiled_copy<
-      NumThreadsPerWarpGroup * NumLoadWarpGroups, ElementA, AlignmentA, TagToStrideA_t<GmemLayoutATag>,
-      decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
-  using GmemTiledCopyB = decltype(detail::make_cp_async_gmem_tiled_copy<
-      NumThreadsPerWarpGroup * NumLoadWarpGroups, ElementB, AlignmentB, TagToStrideB_t<GmemLayoutBTag>,
-      decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
-
-  using SmemLayoutAtomA = decltype(detail::ss_smem_selector<
-      GmmaMajorA, ElementAMma, decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
-  using SmemLayoutAtomB = decltype(detail::ss_smem_selector<
-      GmmaMajorB, ElementBMma, decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
-
-  static constexpr int PipelineStages = detail::compute_stage_count_or_override<
-      detail::sm90_smem_capacity_bytes, ElementAMma, ElementBMma, TileShape_MNK>(StageCountType{});
-
-  using DispatchPolicy = MainloopSm90CpAsyncGmmaWarpSpecialized<
-      PipelineStages, ClusterShape_MNK, KernelScheduleType>;
-
-  using CollectiveOp = CollectiveMma<
-      DispatchPolicy,
-      TileShape_MNK,
-      ElementA,
-      TagToStrideA_t<GmemLayoutATag>,
-      ElementB,
-      TagToStrideB_t<GmemLayoutBTag>,
-      TiledMma,
-      GmemTiledCopyA,
-      SmemLayoutAtomA,
-      void,
-      cute::identity,
-      GmemTiledCopyB,
-      SmemLayoutAtomB,
-      void,
-      cute::identity
-    >;
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-// GMMA_CpAsync_WS_RS
-template <
-  class ElementA,
-  class GmemLayoutATag,
-  int   AlignmentA,
-  class ElementB,
-  class GmemLayoutBTag,
-  int   AlignmentB,
-  class ElementAccumulator,
-  class TileShape_MNK,
-  class ClusterShape_MNK,
-  class StageCountType,
-  class KernelScheduleType
->
-struct CollectiveBuilder<
-    arch::Sm90,
-    arch::OpClassTensorOp,
-    ElementA,
-    GmemLayoutATag,
-    AlignmentA,
-    ElementB,
-    GmemLayoutBTag,
-    AlignmentB,
-    ElementAccumulator,
-    TileShape_MNK,
-    ClusterShape_MNK,
-    StageCountType,
-    KernelScheduleType,
-    cute::enable_if_t<
-      (cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecialized> ||
-       cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecializedCooperative> ||
-       cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecializedPingpong>) &&
-      detail::is_use_rmem_A<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>()
-    >
-> {
-  static_assert(is_static<TileShape_MNK>::value);
-  static_assert(is_static<ClusterShape_MNK>::value);
-#ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
-  static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
-#endif
-
-  // For fp32 types, map to tf32 MMA value type
-  using ElementAMma = cute::conditional_t<cute::is_same_v<ElementA, float>, tfloat32_t, ElementA>;
-  using ElementBMma = cute::conditional_t<cute::is_same_v<ElementB, float>, tfloat32_t, ElementB>;
-
-  static_assert(detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, detail::cp_async_min_alignment_bytes>(),
-                "Minimum alignment required for cp.async is 4B.");
-
-  static constexpr cute::GMMA::Major GmmaMajorA = detail::gmma_rs_tag_to_major_A<GmemLayoutATag>();
-  static constexpr cute::GMMA::Major GmmaMajorB = detail::gmma_rs_tag_to_major_B<GmemLayoutBTag>();
-  static constexpr bool SwapAB = detail::is_swapAB<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>();
-  static constexpr bool IsWarpSpecializedTransposeB = detail::is_warpspecialized_transpose_B<
-      ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag, KernelScheduleType>();
-
-  using AtomLayoutMNK = cute::conditional_t<cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecializedCooperative>,
-      Layout<Shape<cute::Int<(size<0>(TileShape_MNK{}) < 128) ? 1 : 2>,_1,_1>>, Layout<Shape<_1,_1,_1>>>;
-
-  using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::rs_op_selector<
-      ElementAMma, ElementBMma, ElementAccumulator, TileShape_MNK, GMMA::Major::K, GMMA::Major::K>(), AtomLayoutMNK{}));
-
-  static constexpr int NumLoadWarpGroups = 1;
-
-  using GmemTiledCopyA = decltype(detail::make_cp_async_gmem_tiled_copy<
-      NumThreadsPerWarpGroup * NumLoadWarpGroups, ElementA, AlignmentA, TagToStrideA_t<GmemLayoutATag>,
-      decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
-  using GmemTiledCopyB = decltype(detail::make_cp_async_gmem_tiled_copy<
-      NumThreadsPerWarpGroup * NumLoadWarpGroups, ElementB, AlignmentB, TagToStrideB_t<GmemLayoutBTag>,
-      decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
-
-  using SmemLayoutAtomA = decltype(detail::rs_smem_selector<GmmaMajorA, ElementAMma, 
-      decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{})), IsWarpSpecializedTransposeB>());
-  using SmemLayoutAtomB = decltype(detail::rs_smem_selector<GmmaMajorB, ElementBMma,
-      decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{})), IsWarpSpecializedTransposeB>());
-
-  static constexpr int PipelineStages = detail::compute_stage_count_or_override<
-      detail::sm90_smem_capacity_bytes, ElementAMma, ElementBMma, TileShape_MNK>(StageCountType{});
-
-  using DispatchPolicy = MainloopSm90CpAsyncGmmaRmemAWarpSpecialized<
-      PipelineStages, ClusterShape_MNK, KernelScheduleType>;
-
-  using SmemCopyAtomA = cute::conditional_t<SwapAB, void, Copy_Atom<cute::DefaultCopy, ElementA>>;
-  using SmemCopyAtomB = cute::conditional_t<SwapAB, Copy_Atom<cute::DefaultCopy, ElementB>, void>;
-
-  using CollectiveOp = CollectiveMma<
-      DispatchPolicy,
-      TileShape_MNK,
-      ElementA,
-      TagToStrideA_t<GmemLayoutATag>,
-      ElementB,
-      TagToStrideB_t<GmemLayoutBTag>,
-      TiledMma,
-      GmemTiledCopyA,
-      SmemLayoutAtomA,
-      SmemCopyAtomA,
-      cute::identity,
-      GmemTiledCopyB,
-      SmemLayoutAtomB,
-      SmemCopyAtomB,
-      cute::identity
-    >;
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-// GMMA auto kernel schedule
-template <
-  class ElementA,
-  class GmemLayoutATag,
-  int AlignmentA,
-  class ElementB,
-  class GmemLayoutBTag,
-  int AlignmentB,
-  class ElementAccumulator,
-  class TileShape_MNK,
-  class ClusterShape_MNK,
-  class StageCountType,
-  class KernelScheduleType
->
-struct CollectiveBuilder<
-    arch::Sm90,
-    arch::OpClassTensorOp,
-    ElementA,
-    GmemLayoutATag,
-    AlignmentA,
-    ElementB,
-    GmemLayoutBTag,
-    AlignmentB,
-    ElementAccumulator,
-    TileShape_MNK,
-    ClusterShape_MNK,
-    StageCountType,
-    KernelScheduleType,
-    cute::enable_if_t<cute::is_same_v<KernelScheduleType, KernelScheduleAuto>>
-> {
-  static_assert(is_static<TileShape_MNK>::value);
-  static_assert(is_static<ClusterShape_MNK>::value);
-#ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
-  static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
-#endif
-
-using ExtractedElementA = detail::deduce_mixed_width_dtype_t<0, ElementA>;
-using ExtractedElementB = detail::deduce_mixed_width_dtype_t<0, ElementB>;
-
-static constexpr bool IsTmaCompatible = detail::is_aligned<
-    ExtractedElementA, AlignmentA, ExtractedElementB, AlignmentB, detail::tma_alignment_bytes>();
-
-// Users opt into scales via the builder by passing a tuple of Elements for the input that will be scaled. We detect
-// scale support if ONLY one of the inputs have tuples to describe them.
-static constexpr bool OnlyOneIsTuple = cute::is_tuple<ElementA>::value ^ cute::is_tuple<ElementB>::value;
-static constexpr bool IsDifferentWidth = sizeof_bits<ExtractedElementA>::value != sizeof_bits<ExtractedElementB>::value;
-static constexpr bool IsMixedWidthInput = IsDifferentWidth || (IsDifferentWidth && OnlyOneIsTuple);
-
-#if ((__CUDACC_VER_MAJOR__ > 12) || ((__CUDACC_VER_MAJOR__ == 12) && (__CUDACC_VER_MINOR__ >= 1)))
-  // Persistent schedules perform best for CUDA Toolkits with version >= 12.1
-  // KernelTmaWarpSpecializedCooperative requires TileShape_M to be at least 128
-  using KernelTmaWarpSpecializedScheduleSameInput = cute::conditional_t<size<0>(TileShape_MNK{}) == Int<64>{},
-      KernelTmaWarpSpecializedPingpong, KernelTmaWarpSpecializedCooperative>;
-
-  using KernelTmaWarpSpecializedScheduleMixedInput = cute::conditional_t<size<0>(TileShape_MNK{}) == Int<64>{},
-      KernelTmaWarpSpecializedPingpongMixedInput, KernelTmaWarpSpecializedCooperativeMixedInput>;
-
-  using KernelTmaWarpSpecializedSchedule = cute::conditional_t<IsMixedWidthInput, KernelTmaWarpSpecializedScheduleMixedInput, KernelTmaWarpSpecializedScheduleSameInput>;
-#else
-  using KernelTmaWarpSpecializedSchedule = cute::conditional_t<IsMixedWidthInput, KernelTmaWarpSpecializedMixedInput, KernelTmaWarpSpecialized>;
-#endif
-
-  // Non-persistent schedule is a safer choice for CpAsync kernels due to register pressure
-  using KernelCpAsyncWarpSpecializedSchedule = KernelCpAsyncWarpSpecialized;
-  using KernelSchedule = cute::conditional_t<IsTmaCompatible, KernelTmaWarpSpecializedSchedule, KernelCpAsyncWarpSpecializedSchedule>;
-  static_assert((cute::is_same_v<KernelSchedule, KernelTmaWarpSpecializedSchedule> && IsMixedWidthInput) || !IsMixedWidthInput, "Only TMA warp specialized kernels are supported for mixed width input.");
-  using CollectiveOp = typename CollectiveBuilder<
-      arch::Sm90,
-      arch::OpClassTensorOp,
-      ElementA,
-      GmemLayoutATag,
-      AlignmentA,
-      ElementB,
-      GmemLayoutBTag,
-      AlignmentB,
-      ElementAccumulator,
-      TileShape_MNK,
-      ClusterShape_MNK,
-      StageCountType,
-      KernelSchedule
-    >::CollectiveOp;
-};
+// // GMMA_TMA_WS_RS
+// template <
+//   class ElementA,
+//   class GmemLayoutATag,
+//   int AlignmentA,
+//   class ElementB,
+//   class GmemLayoutBTag,
+//   int AlignmentB,
+//   class ElementAccumulator,
+//   class TileShape_MNK,
+//   class ClusterShape_MNK,
+//   class StageCountType,
+//   class KernelScheduleType
+// >
+// struct CollectiveBuilder<
+//     arch::Sm90,
+//     arch::OpClassTensorOp,
+//     ElementA,
+//     GmemLayoutATag,
+//     AlignmentA,
+//     ElementB,
+//     GmemLayoutBTag,
+//     AlignmentB,
+//     ElementAccumulator,
+//     TileShape_MNK,
+//     ClusterShape_MNK,
+//     StageCountType,
+//     KernelScheduleType,
+//     cute::enable_if_t<
+//       (cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecialized> ||
+//        cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedPingpong> ||
+//        cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperative>) &&
+//       detail::is_use_rmem_A<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>()> 
+// > {
+//   static_assert(is_static<TileShape_MNK>::value);
+//   static_assert(is_static<ClusterShape_MNK>::value);
+//   static_assert(detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, detail::tma_alignment_bytes>(),
+//                 "Should meet TMA alignment requirement\n");
+// #ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
+//   static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
+// #endif
+//   static constexpr cute::GMMA::Major GmmaMajorA = detail::gmma_rs_tag_to_major_A<GmemLayoutATag>();
+//   static constexpr cute::GMMA::Major GmmaMajorB = detail::gmma_rs_tag_to_major_B<GmemLayoutBTag>();
+//   static constexpr bool SwapAB = detail::is_swapAB<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>();
+//   static constexpr bool IsWarpSpecializedTransposeB = detail::is_warpspecialized_transpose_B<
+//       ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag, KernelScheduleType>();
+
+//   // For fp32 types, map to tf32 MMA value type
+//   using ElementAMma = cute::conditional_t<cute::is_same_v<ElementA, float>, tfloat32_t, ElementA>;
+//   using ElementBMma = cute::conditional_t<cute::is_same_v<ElementB, float>, tfloat32_t, ElementB>;
+
+//   using AtomLayoutMNK = cute::conditional_t<cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperative>,
+//       Layout<Shape<_2,_1,_1>>, Layout<Shape<_1,_1,_1>>>;
+
+//   using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::rs_op_selector<
+//       ElementAMma, ElementBMma, ElementAccumulator, TileShape_MNK, GMMA::Major::K, GMMA::Major::K>(), AtomLayoutMNK{}));
+
+//   using GmemTiledCopyA = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<1>(ClusterShape_MNK{})));
+//   using GmemTiledCopyB = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<0>(ClusterShape_MNK{})));
+
+//   using SmemLayoutAtomA = decltype(detail::rs_smem_selector<GmmaMajorA, ElementAMma,
+//       decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{})), IsWarpSpecializedTransposeB>());
+//   using SmemLayoutAtomB = decltype(detail::rs_smem_selector<GmmaMajorB, ElementBMma,
+//       decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{})), IsWarpSpecializedTransposeB>());
+
+//   static constexpr int PipelineStages = detail::compute_stage_count_or_override<detail::sm90_smem_capacity_bytes,
+//       ElementAMma, ElementBMma, TileShape_MNK>(StageCountType{});
+
+//   using DispatchPolicy = MainloopSm90TmaGmmaRmemAWarpSpecialized<
+//       PipelineStages, ClusterShape_MNK, KernelScheduleType>;
+
+//   using SmemCopyAtomA = cute::conditional_t<SwapAB, void, Copy_Atom<cute::DefaultCopy, ElementA>>;
+//   using SmemCopyAtomB = cute::conditional_t<SwapAB, Copy_Atom<cute::DefaultCopy, ElementB>, void>;
+
+//   using CollectiveOp = CollectiveMma<
+//       DispatchPolicy,
+//       TileShape_MNK,
+//       ElementA,
+//       TagToStrideA_t<GmemLayoutATag>,
+//       ElementB,
+//       TagToStrideB_t<GmemLayoutBTag>,
+//       TiledMma,
+//       GmemTiledCopyA,
+//       SmemLayoutAtomA,
+//       SmemCopyAtomA,
+//       cute::identity,
+//       GmemTiledCopyB,
+//       SmemLayoutAtomB,
+//       SmemCopyAtomB,
+//       cute::identity
+//     >;
+// };
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////
+
+// // GMMA_TMA_WS_RS Mixed Scaled GEMM
+// template <
+//   class ElementPairA_,
+//   class GmemLayoutATag_,
+//   int AlignmentA,
+//   class ElementPairB_,
+//   class GmemLayoutBTag_,
+//   int AlignmentB,
+//   class ElementAccumulator,
+//   class TileShape_MNK,
+//   class ClusterShape_MNK,
+//   class StageCountType,
+//   class KernelScheduleType
+// >
+// struct CollectiveBuilder<
+//     arch::Sm90,
+//     arch::OpClassTensorOp,
+//     ElementPairA_,
+//     GmemLayoutATag_,
+//     AlignmentA,
+//     ElementPairB_,
+//     GmemLayoutBTag_,
+//     AlignmentB,
+//     ElementAccumulator,
+//     TileShape_MNK,
+//     ClusterShape_MNK,
+//     StageCountType,
+//     KernelScheduleType,
+//     cute::enable_if_t<
+//       (cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedMixedInput> ||
+//        cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedPingpongMixedInput> ||
+//        cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperativeMixedInput>)>
+// > {
+
+// private:
+//   using ScaleA = detail::deduce_mixed_width_dtype_t<1, ElementPairA_>;
+//   using ScaleB = detail::deduce_mixed_width_dtype_t<1, ElementPairB_>;
+//   using ZeroA = detail::deduce_mixed_width_dtype_t<2, ElementPairA_>;
+//   using ZeroB = detail::deduce_mixed_width_dtype_t<2, ElementPairB_>;
+//   static constexpr bool NeitherIsTuple = !cute::is_tuple<ElementPairA_>::value && !cute::is_tuple<ElementPairB_>::value;
+
+// public:
+//   using ElementA = detail::deduce_mixed_width_dtype_t<0, ElementPairA_>;
+//   using ElementB = detail::deduce_mixed_width_dtype_t<0, ElementPairB_>;
+//   static_assert(cute::is_tuple<ElementPairA_>::value ^ cute::is_tuple<ElementPairB_>::value ||
+//                (NeitherIsTuple && (sizeof_bits<ElementA>::value != sizeof_bits<ElementB>::value)), 
+//     "Either A OR B must be a tuple or the widths of A and B must be different.");
+
+//   static constexpr bool IsANarrow = sizeof_bits<ElementA>::value < sizeof_bits<ElementB>::value;
+
+//   using GmemLayoutATag = GmemLayoutATag_;
+//   using GmemLayoutBTag = GmemLayoutBTag_;
+
+//   using ElementPairA = cute::conditional_t<IsANarrow && NeitherIsTuple, cute::tuple<ElementA>, ElementPairA_>;
+//   using ElementPairB = cute::conditional_t<!IsANarrow && NeitherIsTuple, cute::tuple<ElementB>, ElementPairB_>;
+
+//   static constexpr bool IsATransformed = cute::is_tuple<ElementPairA>::value;
+//   using ElementScale = cute::conditional_t<IsATransformed, ScaleA, ScaleB>;
+//   using ElementZero = cute::conditional_t<IsATransformed, ZeroA, ZeroB>;
+
+//   static_assert(is_static<TileShape_MNK>::value);
+//   static_assert(is_static<ClusterShape_MNK>::value);
+//   static_assert(detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, detail::tma_alignment_bytes>(),
+//                 "Should meet TMA alignment requirement\n");
+// #ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
+//   static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
+// #endif
+//   static constexpr cute::GMMA::Major GmmaMajorA = detail::gmma_rs_tag_to_major_A<GmemLayoutATag>();
+//   static constexpr cute::GMMA::Major GmmaMajorB = detail::gmma_rs_tag_to_major_B<GmemLayoutBTag>();
+//   static constexpr bool IsWarpSpecializedTransposeB = detail::is_warpspecialized_transpose_B<
+//       ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag, KernelScheduleType>();
+//   static_assert(!IsWarpSpecializedTransposeB, "Mixed input GEMM does not support WS transpose B.");
+
+//   // If A is scaled, then we don't need to swap. Otherwise, we must ensure B goes to RF and we must swap the operands.
+//   static constexpr bool SwapAB = !IsATransformed;
+
+//   // When we relax the above assertion, we must handle setting the tile mma GmmaMajorB correctly.
+//   static constexpr cute::GMMA::Major TiledMmaGmmaMajorB = SwapAB ? GmmaMajorA : GmmaMajorB;
+
+//   using ElementMma = cute::conditional_t<IsATransformed, ElementB, ElementA>;
+//   using AtomLayoutMNK = cute::conditional_t<cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperativeMixedInput>,
+//       Layout<Shape<_2,_1,_1>>, Layout<Shape<_1,_1,_1>>>;
+
+//   using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::rs_op_selector<
+//       ElementMma, ElementMma, ElementAccumulator, TileShape_MNK, GMMA::Major::K, TiledMmaGmmaMajorB>(), AtomLayoutMNK{}));
+
+//   using GmemTiledCopyA = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<1>(ClusterShape_MNK{})));
+//   using GmemTiledCopyB = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<0>(ClusterShape_MNK{})));
+
+//   using SmemLayoutAtomA = decltype(detail::rs_smem_selector<GmmaMajorA, ElementA,
+//       decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{})), IsWarpSpecializedTransposeB>());
+//   using SmemLayoutAtomB = decltype(detail::rs_smem_selector<GmmaMajorB, ElementB,
+//       decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{})), IsWarpSpecializedTransposeB>());
+
+//   using RealElementA = cute::conditional_t<SwapAB, ElementB, ElementA>;
+//   using RealElementB = cute::conditional_t<SwapAB, ElementA, ElementB>;
+//   static constexpr int PipelineStages = detail::compute_stage_count_or_override_single_affine_transformed_input<detail::sm90_smem_capacity_bytes,
+//       RealElementA, RealElementB, ElementScale, ElementZero, TileShape_MNK>(StageCountType{});
+
+//   using SmemCopyAtomA = cute::conditional_t<SwapAB, void, Copy_Atom<cute::DefaultCopy, ElementA>>;
+//   using SmemCopyAtomB = cute::conditional_t<SwapAB, Copy_Atom<cute::DefaultCopy, ElementB>, void>;
+
+//   using DispatchPolicy = MainloopSm90TmaGmmaRmemAWarpSpecializedMixedInput<PipelineStages, ClusterShape_MNK, KernelScheduleType>;
+
+//   // We pack the scale data with the operand that will be optionally scaled and converted before MMA.
+//   using StrideA = TagToStrideA_t<GmemLayoutATag>;
+//   using StrideB = TagToStrideB_t<GmemLayoutBTag>;
+
+//   using CollectiveOp = CollectiveMma<
+//       DispatchPolicy,
+//       TileShape_MNK,
+//       ElementPairA,
+//       StrideA,
+//       ElementPairB,
+//       StrideB,
+//       TiledMma,
+//       GmemTiledCopyA,
+//       SmemLayoutAtomA,
+//       SmemCopyAtomA,
+//       cute::identity,
+//       GmemTiledCopyB,
+//       SmemLayoutAtomB,
+//       SmemCopyAtomB,
+//       cute::identity
+//     >;
+
+// };
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////
+
+// // GMMA_TMA_WS_FP8_FAST_ACCUM_SS
+// template <
+//   class ElementA,
+//   class GmemLayoutATag,
+//   int AlignmentA,
+//   class ElementB,
+//   class GmemLayoutBTag,
+//   int AlignmentB,
+//   class ElementAccumulator,
+//   class TileShape_MNK,
+//   class ClusterShape_MNK,
+//   class StageCountType,
+//   class KernelScheduleType
+// >
+// struct CollectiveBuilder<
+//     arch::Sm90,
+//     arch::OpClassTensorOp,
+//     ElementA,
+//     GmemLayoutATag,
+//     AlignmentA,
+//     ElementB,
+//     GmemLayoutBTag,
+//     AlignmentB,
+//     ElementAccumulator,
+//     TileShape_MNK,
+//     ClusterShape_MNK,
+//     StageCountType,
+//     KernelScheduleType,
+//     cute::enable_if_t<
+//       cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedFP8FastAccum> ||
+//       cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedPingpongFP8FastAccum> ||
+//       cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperativeFP8FastAccum> ||
+//        cute::is_same_v<KernelScheduleType, KernelPtrArrayTmaWarpSpecializedCooperativeFP8FastAccum>>
+// > {
+//   static_assert(is_static<TileShape_MNK>::value);
+//   static_assert(is_static<ClusterShape_MNK>::value);
+//   static_assert(detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, detail::tma_alignment_bytes>(),
+//                 "Not meet TMA alignment requirement yet\n");
+//   static_assert(detail::is_input_fp8<ElementA, ElementB>(),
+//                 "Only FP8 datatypes are compatible with these kernel schedules\n");
+//   // Dispatch TN fp8 kernels only to TMA warp specialized FP8 builder
+//   static_assert(!detail::is_use_rmem_A<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>(),
+//                  "Not supported for fp8 non-TN warp specialized kernels yet\n");
+// #ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
+//   static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
+// #endif
+
+//   static constexpr cute::GMMA::Major GmmaMajorA = detail::gmma_ss_tag_to_major_A<ElementA, GmemLayoutATag>();
+//   static constexpr cute::GMMA::Major GmmaMajorB = detail::gmma_ss_tag_to_major_B<ElementB, GmemLayoutBTag>();
+
+//   static constexpr bool IsArrayOfPointersGemm = (cute::is_same_v<KernelScheduleType, KernelPtrArrayTmaWarpSpecializedCooperativeFP8FastAccum>);
+//   using AtomLayoutMNK = cute::conditional_t<cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperativeFP8FastAccum> ||
+//                                             IsArrayOfPointersGemm,
+//       Layout<Shape<_2,_1,_1>>, Layout<Shape<_1,_1,_1>>>;
+
+//   using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::ss_op_selector<
+//       ElementA, ElementB, ElementAccumulator, TileShape_MNK, GmmaMajorA, GmmaMajorB>(), AtomLayoutMNK{}));
+
+//   using GmemTiledCopyA = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<1>(ClusterShape_MNK{})));
+//   using GmemTiledCopyB = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<0>(ClusterShape_MNK{})));
+
+//   using SmemLayoutAtomA = decltype(detail::ss_smem_selector<
+//       GmmaMajorA, ElementA, decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
+//   using SmemLayoutAtomB = decltype(detail::ss_smem_selector<
+//       GmmaMajorB, ElementB, decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
+
+//   static constexpr int PipelineStages = detail::compute_stage_count_or_override<detail::sm90_smem_capacity_bytes,
+//       ElementA, ElementB, TileShape_MNK>(StageCountType{});
+//   using DispatchPolicy = cute::conditional_t<IsArrayOfPointersGemm,
+//       MainloopSm90ArrayTmaGmmaWarpSpecialized<PipelineStages, ClusterShape_MNK, KernelScheduleType>,
+//       MainloopSm90TmaGmmaWarpSpecialized<PipelineStages, ClusterShape_MNK, KernelScheduleType>>;
+
+//   using SmemCopyAtomA = void;
+//   using SmemCopyAtomB = void;
+
+//   using CollectiveOp = CollectiveMma<
+//       DispatchPolicy,
+//       TileShape_MNK,
+//       ElementA,
+//       TagToStrideA_t<GmemLayoutATag>,
+//       ElementB,
+//       TagToStrideB_t<GmemLayoutBTag>,
+//       TiledMma,
+//       GmemTiledCopyA,
+//       SmemLayoutAtomA,
+//       SmemCopyAtomA,
+//       cute::identity,
+//       GmemTiledCopyB,
+//       SmemLayoutAtomB,
+//       SmemCopyAtomB,
+//       cute::identity
+//     >;
+// };
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////
+
+// // GMMA_TMA_SS
+// template <
+//   class ElementA,
+//   class GmemLayoutATag,
+//   int AlignmentA,
+//   class ElementB,
+//   class GmemLayoutBTag,
+//   int AlignmentB,
+//   class ElementAccumulator,
+//   class TileShape_MNK,
+//   class ClusterShape_MNK,
+//   class StageCountType,
+//   class KernelScheduleType
+// >
+// struct CollectiveBuilder<
+//     arch::Sm90,
+//     arch::OpClassTensorOp,
+//     ElementA,
+//     GmemLayoutATag,
+//     AlignmentA,
+//     ElementB,
+//     GmemLayoutBTag,
+//     AlignmentB,
+//     ElementAccumulator,
+//     TileShape_MNK,
+//     ClusterShape_MNK,
+//     StageCountType,
+//     KernelScheduleType,
+//     cute::enable_if_t<cute::is_same_v<KernelScheduleType, KernelTma> &&
+//                      not detail::is_use_rmem_A<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>()>
+// > {
+//   static_assert(is_static<TileShape_MNK>::value);
+//   static_assert(is_static<ClusterShape_MNK>::value);
+//   static_assert(detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, detail::tma_alignment_bytes>(),
+//                 "Should meet TMA alignment requirement\n");
+// #ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
+//   static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
+// #endif
+
+//   // For fp32 types, map to tf32 MMA value type
+//   using ElementAMma = cute::conditional_t<cute::is_same_v<ElementA, float>, tfloat32_t, ElementA>;
+//   using ElementBMma = cute::conditional_t<cute::is_same_v<ElementB, float>, tfloat32_t, ElementB>;
+
+//   static constexpr cute::GMMA::Major GmmaMajorA = detail::gmma_ss_tag_to_major_A<ElementAMma, GmemLayoutATag>();
+//   static constexpr cute::GMMA::Major GmmaMajorB = detail::gmma_ss_tag_to_major_B<ElementBMma, GmemLayoutBTag>();
+
+//   using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::ss_op_selector<
+//       ElementAMma, ElementBMma, ElementAccumulator, TileShape_MNK, GmmaMajorA, GmmaMajorB>()));
+
+//   using GmemTiledCopyA = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<1>(ClusterShape_MNK{})));
+//   using GmemTiledCopyB = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<0>(ClusterShape_MNK{})));
+
+//   using SmemLayoutAtomA = decltype(detail::ss_smem_selector<
+//       GmmaMajorA, ElementAMma, decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
+//   using SmemLayoutAtomB = decltype(detail::ss_smem_selector<
+//       GmmaMajorB, ElementBMma, decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
+
+//   static constexpr int PipelineStages = detail::compute_stage_count_or_override<detail::sm90_smem_capacity_bytes,
+//       ElementAMma, ElementBMma, TileShape_MNK>(StageCountType{});
+//   using DispatchPolicy = MainloopSm90TmaGmma<PipelineStages, ClusterShape_MNK>;
+
+//   using SmemCopyAtomA = void;
+//   using SmemCopyAtomB = void;
+
+//   using CollectiveOp = CollectiveMma<
+//       DispatchPolicy,
+//       TileShape_MNK,
+//       ElementA,
+//       TagToStrideA_t<GmemLayoutATag>,
+//       ElementB,
+//       TagToStrideB_t<GmemLayoutBTag>,
+//       TiledMma,
+//       GmemTiledCopyA,
+//       SmemLayoutAtomA,
+//       SmemCopyAtomA,
+//       cute::identity,
+//       GmemTiledCopyB,
+//       SmemLayoutAtomB,
+//       SmemCopyAtomB,
+//       cute::identity
+//     >;
+// };
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////
+
+// // GMMA_CpAsync
+// template <
+//   class ElementA,
+//   class GmemLayoutATag,
+//   int AlignmentA,
+//   class ElementB,
+//   class GmemLayoutBTag,
+//   int AlignmentB,
+//   class ElementAccumulator,
+//   class TileShape_MNK,
+//   class ClusterShape_MNK,
+//   class StageCountType,
+//   class KernelScheduleType
+// >
+// struct [[deprecated("Use one of KernelCpAsyncWarpSpecialized schedules instead")]]
+// CollectiveBuilder<
+//     arch::Sm90,
+//     arch::OpClassTensorOp,
+//     ElementA,
+//     GmemLayoutATag,
+//     AlignmentA,
+//     ElementB,
+//     GmemLayoutBTag,
+//     AlignmentB,
+//     ElementAccumulator,
+//     TileShape_MNK,
+//     ClusterShape_MNK,
+//     StageCountType,
+//     KernelScheduleType,
+//     cute::enable_if_t<
+//       cute::is_same_v<KernelScheduleType, KernelMultistage>>
+// > {
+//   // Map to warp-specialized kernels for better performance
+//   using CollectiveOp = typename CollectiveBuilder<
+//     arch::Sm90,
+//     arch::OpClassTensorOp,
+//     ElementA,
+//     GmemLayoutATag,
+//     AlignmentA,
+//     ElementB,
+//     GmemLayoutBTag,
+//     AlignmentB,
+//     ElementAccumulator,
+//     TileShape_MNK,
+//     ClusterShape_MNK,
+//     StageCountType,
+//     KernelCpAsyncWarpSpecialized
+//   >::CollectiveOp;
+// };
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////
+
+// // GMMA_CpAsync_WS_SS
+// template <
+//   class ElementA,
+//   class GmemLayoutATag,
+//   int   AlignmentA,
+//   class ElementB,
+//   class GmemLayoutBTag,
+//   int   AlignmentB,
+//   class ElementAccumulator,
+//   class TileShape_MNK,
+//   class ClusterShape_MNK,
+//   class StageCountType,
+//   class KernelScheduleType
+// >
+// struct CollectiveBuilder<
+//     arch::Sm90,
+//     arch::OpClassTensorOp,
+//     ElementA,
+//     GmemLayoutATag,
+//     AlignmentA,
+//     ElementB,
+//     GmemLayoutBTag,
+//     AlignmentB,
+//     ElementAccumulator,
+//     TileShape_MNK,
+//     ClusterShape_MNK,
+//     StageCountType,
+//     KernelScheduleType,
+//     cute::enable_if_t<
+//       (cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecialized> ||
+//        cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecializedCooperative> ||
+//        cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecializedPingpong>) &&
+//       not detail::is_use_rmem_A<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>()
+//     >
+// > {
+//   static_assert(is_static<TileShape_MNK>::value);
+//   static_assert(is_static<ClusterShape_MNK>::value);
+// #ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
+//   static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
+// #endif
+
+//   // For fp32 types, map to tf32 MMA value type
+//   using ElementAMma = cute::conditional_t<cute::is_same_v<ElementA, float>, tfloat32_t, ElementA>;
+//   using ElementBMma = cute::conditional_t<cute::is_same_v<ElementB, float>, tfloat32_t, ElementB>;
+
+//   static_assert(detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, detail::cp_async_min_alignment_bytes>(),
+//                 "Minimum alignment required for cp.async is 4B.");
+
+//   static constexpr cute::GMMA::Major GmmaMajorA = detail::gmma_ss_tag_to_major_A<ElementA, GmemLayoutATag>();
+//   static constexpr cute::GMMA::Major GmmaMajorB = detail::gmma_ss_tag_to_major_B<ElementB, GmemLayoutBTag>();
+
+//   using AtomLayoutMNK = cute::conditional_t<cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecializedCooperative>,
+//       Layout<Shape<cute::Int<(size<0>(TileShape_MNK{}) < 128) ? 1 : 2>,_1,_1>>, Layout<Shape<_1,_1,_1>>>;
+
+//   using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::ss_op_selector<
+//       ElementAMma, ElementBMma, ElementAccumulator, TileShape_MNK, GmmaMajorA, GmmaMajorB>(), AtomLayoutMNK{}));
+
+//   static constexpr int NumLoadWarpGroups = cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecialized> ? 2 : 1;
+
+//   using GmemTiledCopyA = decltype(detail::make_cp_async_gmem_tiled_copy<
+//       NumThreadsPerWarpGroup * NumLoadWarpGroups, ElementA, AlignmentA, TagToStrideA_t<GmemLayoutATag>,
+//       decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
+//   using GmemTiledCopyB = decltype(detail::make_cp_async_gmem_tiled_copy<
+//       NumThreadsPerWarpGroup * NumLoadWarpGroups, ElementB, AlignmentB, TagToStrideB_t<GmemLayoutBTag>,
+//       decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
+
+//   using SmemLayoutAtomA = decltype(detail::ss_smem_selector<
+//       GmmaMajorA, ElementAMma, decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
+//   using SmemLayoutAtomB = decltype(detail::ss_smem_selector<
+//       GmmaMajorB, ElementBMma, decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
+
+//   static constexpr int PipelineStages = detail::compute_stage_count_or_override<
+//       detail::sm90_smem_capacity_bytes, ElementAMma, ElementBMma, TileShape_MNK>(StageCountType{});
+
+//   using DispatchPolicy = MainloopSm90CpAsyncGmmaWarpSpecialized<
+//       PipelineStages, ClusterShape_MNK, KernelScheduleType>;
+
+//   using CollectiveOp = CollectiveMma<
+//       DispatchPolicy,
+//       TileShape_MNK,
+//       ElementA,
+//       TagToStrideA_t<GmemLayoutATag>,
+//       ElementB,
+//       TagToStrideB_t<GmemLayoutBTag>,
+//       TiledMma,
+//       GmemTiledCopyA,
+//       SmemLayoutAtomA,
+//       void,
+//       cute::identity,
+//       GmemTiledCopyB,
+//       SmemLayoutAtomB,
+//       void,
+//       cute::identity
+//     >;
+// };
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////
+
+// // GMMA_CpAsync_WS_RS
+// template <
+//   class ElementA,
+//   class GmemLayoutATag,
+//   int   AlignmentA,
+//   class ElementB,
+//   class GmemLayoutBTag,
+//   int   AlignmentB,
+//   class ElementAccumulator,
+//   class TileShape_MNK,
+//   class ClusterShape_MNK,
+//   class StageCountType,
+//   class KernelScheduleType
+// >
+// struct CollectiveBuilder<
+//     arch::Sm90,
+//     arch::OpClassTensorOp,
+//     ElementA,
+//     GmemLayoutATag,
+//     AlignmentA,
+//     ElementB,
+//     GmemLayoutBTag,
+//     AlignmentB,
+//     ElementAccumulator,
+//     TileShape_MNK,
+//     ClusterShape_MNK,
+//     StageCountType,
+//     KernelScheduleType,
+//     cute::enable_if_t<
+//       (cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecialized> ||
+//        cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecializedCooperative> ||
+//        cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecializedPingpong>) &&
+//       detail::is_use_rmem_A<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>()
+//     >
+// > {
+//   static_assert(is_static<TileShape_MNK>::value);
+//   static_assert(is_static<ClusterShape_MNK>::value);
+// #ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
+//   static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
+// #endif
+
+//   // For fp32 types, map to tf32 MMA value type
+//   using ElementAMma = cute::conditional_t<cute::is_same_v<ElementA, float>, tfloat32_t, ElementA>;
+//   using ElementBMma = cute::conditional_t<cute::is_same_v<ElementB, float>, tfloat32_t, ElementB>;
+
+//   static_assert(detail::is_aligned<ElementA, AlignmentA, ElementB, AlignmentB, detail::cp_async_min_alignment_bytes>(),
+//                 "Minimum alignment required for cp.async is 4B.");
+
+//   static constexpr cute::GMMA::Major GmmaMajorA = detail::gmma_rs_tag_to_major_A<GmemLayoutATag>();
+//   static constexpr cute::GMMA::Major GmmaMajorB = detail::gmma_rs_tag_to_major_B<GmemLayoutBTag>();
+//   static constexpr bool SwapAB = detail::is_swapAB<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>();
+//   static constexpr bool IsWarpSpecializedTransposeB = detail::is_warpspecialized_transpose_B<
+//       ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag, KernelScheduleType>();
+
+//   using AtomLayoutMNK = cute::conditional_t<cute::is_same_v<KernelScheduleType, KernelCpAsyncWarpSpecializedCooperative>,
+//       Layout<Shape<cute::Int<(size<0>(TileShape_MNK{}) < 128) ? 1 : 2>,_1,_1>>, Layout<Shape<_1,_1,_1>>>;
+
+//   using TiledMma = decltype(cute::make_tiled_mma(cute::GMMA::rs_op_selector<
+//       ElementAMma, ElementBMma, ElementAccumulator, TileShape_MNK, GMMA::Major::K, GMMA::Major::K>(), AtomLayoutMNK{}));
+
+//   static constexpr int NumLoadWarpGroups = 1;
+
+//   using GmemTiledCopyA = decltype(detail::make_cp_async_gmem_tiled_copy<
+//       NumThreadsPerWarpGroup * NumLoadWarpGroups, ElementA, AlignmentA, TagToStrideA_t<GmemLayoutATag>,
+//       decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
+//   using GmemTiledCopyB = decltype(detail::make_cp_async_gmem_tiled_copy<
+//       NumThreadsPerWarpGroup * NumLoadWarpGroups, ElementB, AlignmentB, TagToStrideB_t<GmemLayoutBTag>,
+//       decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
+
+//   using SmemLayoutAtomA = decltype(detail::rs_smem_selector<GmmaMajorA, ElementAMma, 
+//       decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{})), IsWarpSpecializedTransposeB>());
+//   using SmemLayoutAtomB = decltype(detail::rs_smem_selector<GmmaMajorB, ElementBMma,
+//       decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{})), IsWarpSpecializedTransposeB>());
+
+//   static constexpr int PipelineStages = detail::compute_stage_count_or_override<
+//       detail::sm90_smem_capacity_bytes, ElementAMma, ElementBMma, TileShape_MNK>(StageCountType{});
+
+//   using DispatchPolicy = MainloopSm90CpAsyncGmmaRmemAWarpSpecialized<
+//       PipelineStages, ClusterShape_MNK, KernelScheduleType>;
+
+//   using SmemCopyAtomA = cute::conditional_t<SwapAB, void, Copy_Atom<cute::DefaultCopy, ElementA>>;
+//   using SmemCopyAtomB = cute::conditional_t<SwapAB, Copy_Atom<cute::DefaultCopy, ElementB>, void>;
+
+//   using CollectiveOp = CollectiveMma<
+//       DispatchPolicy,
+//       TileShape_MNK,
+//       ElementA,
+//       TagToStrideA_t<GmemLayoutATag>,
+//       ElementB,
+//       TagToStrideB_t<GmemLayoutBTag>,
+//       TiledMma,
+//       GmemTiledCopyA,
+//       SmemLayoutAtomA,
+//       SmemCopyAtomA,
+//       cute::identity,
+//       GmemTiledCopyB,
+//       SmemLayoutAtomB,
+//       SmemCopyAtomB,
+//       cute::identity
+//     >;
+// };
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////
+
+// // GMMA auto kernel schedule
+// template <
+//   class ElementA,
+//   class GmemLayoutATag,
+//   int AlignmentA,
+//   class ElementB,
+//   class GmemLayoutBTag,
+//   int AlignmentB,
+//   class ElementAccumulator,
+//   class TileShape_MNK,
+//   class ClusterShape_MNK,
+//   class StageCountType,
+//   class KernelScheduleType
+// >
+// struct CollectiveBuilder<
+//     arch::Sm90,
+//     arch::OpClassTensorOp,
+//     ElementA,
+//     GmemLayoutATag,
+//     AlignmentA,
+//     ElementB,
+//     GmemLayoutBTag,
+//     AlignmentB,
+//     ElementAccumulator,
+//     TileShape_MNK,
+//     ClusterShape_MNK,
+//     StageCountType,
+//     KernelScheduleType,
+//     cute::enable_if_t<cute::is_same_v<KernelScheduleType, KernelScheduleAuto>>
+// > {
+//   static_assert(is_static<TileShape_MNK>::value);
+//   static_assert(is_static<ClusterShape_MNK>::value);
+// #ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
+//   static_assert(cutlass::detail::dependent_false<ElementA>, "Unsupported Toolkit for SM90 Collective Builder\n");
+// #endif
+
+// using ExtractedElementA = detail::deduce_mixed_width_dtype_t<0, ElementA>;
+// using ExtractedElementB = detail::deduce_mixed_width_dtype_t<0, ElementB>;
+
+// static constexpr bool IsTmaCompatible = detail::is_aligned<
+//     ExtractedElementA, AlignmentA, ExtractedElementB, AlignmentB, detail::tma_alignment_bytes>();
+
+// // Users opt into scales via the builder by passing a tuple of Elements for the input that will be scaled. We detect
+// // scale support if ONLY one of the inputs have tuples to describe them.
+// static constexpr bool OnlyOneIsTuple = cute::is_tuple<ElementA>::value ^ cute::is_tuple<ElementB>::value;
+// static constexpr bool IsDifferentWidth = sizeof_bits<ExtractedElementA>::value != sizeof_bits<ExtractedElementB>::value;
+// static constexpr bool IsMixedWidthInput = IsDifferentWidth || (IsDifferentWidth && OnlyOneIsTuple);
+
+// #if ((__CUDACC_VER_MAJOR__ > 12) || ((__CUDACC_VER_MAJOR__ == 12) && (__CUDACC_VER_MINOR__ >= 1)))
+//   // Persistent schedules perform best for CUDA Toolkits with version >= 12.1
+//   // KernelTmaWarpSpecializedCooperative requires TileShape_M to be at least 128
+//   using KernelTmaWarpSpecializedScheduleSameInput = cute::conditional_t<size<0>(TileShape_MNK{}) == Int<64>{},
+//       KernelTmaWarpSpecializedPingpong, KernelTmaWarpSpecializedCooperative>;
+
+//   using KernelTmaWarpSpecializedScheduleMixedInput = cute::conditional_t<size<0>(TileShape_MNK{}) == Int<64>{},
+//       KernelTmaWarpSpecializedPingpongMixedInput, KernelTmaWarpSpecializedCooperativeMixedInput>;
+
+//   using KernelTmaWarpSpecializedSchedule = cute::conditional_t<IsMixedWidthInput, KernelTmaWarpSpecializedScheduleMixedInput, KernelTmaWarpSpecializedScheduleSameInput>;
+// #else
+//   using KernelTmaWarpSpecializedSchedule = cute::conditional_t<IsMixedWidthInput, KernelTmaWarpSpecializedMixedInput, KernelTmaWarpSpecialized>;
+// #endif
+
+//   // Non-persistent schedule is a safer choice for CpAsync kernels due to register pressure
+//   using KernelCpAsyncWarpSpecializedSchedule = KernelCpAsyncWarpSpecialized;
+//   using KernelSchedule = cute::conditional_t<IsTmaCompatible, KernelTmaWarpSpecializedSchedule, KernelCpAsyncWarpSpecializedSchedule>;
+//   static_assert((cute::is_same_v<KernelSchedule, KernelTmaWarpSpecializedSchedule> && IsMixedWidthInput) || !IsMixedWidthInput, "Only TMA warp specialized kernels are supported for mixed width input.");
+//   using CollectiveOp = typename CollectiveBuilder<
+//       arch::Sm90,
+//       arch::OpClassTensorOp,
+//       ElementA,
+//       GmemLayoutATag,
+//       AlignmentA,
+//       ElementB,
+//       GmemLayoutBTag,
+//       AlignmentB,
+//       ElementAccumulator,
+//       TileShape_MNK,
+//       ClusterShape_MNK,
+//       StageCountType,
+//       KernelSchedule
+//     >::CollectiveOp;
+// };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 

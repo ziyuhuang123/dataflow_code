@@ -70,8 +70,8 @@ public:
   // Type Aliases
   //
   using ProblemShape = ProblemShape_;
-  static_assert(cute::rank(ProblemShape{}) == 3 or cute::rank(ProblemShape{}) == 4,
-    "ProblemShape{} should be <M,N,K> or <M,N,K,L>");
+  static_assert(cute::rank(ProblemShape{}) == 3 or cute::rank(ProblemShape{}) == 4 or cute::rank(ProblemShape{}) == 5,
+    "ProblemShape{} should be <M,N,K> or <M,N,K,L> or <M,N,K,L,T>");
   // Mainloop derived types
   using CollectiveMainloop = CollectiveMainloop_;
   using TileShape = typename CollectiveMainloop::TileShape;
@@ -235,7 +235,7 @@ public:
       get<0>(problem_shape) = get<1>(args.problem_shape);
       get<1>(problem_shape) = get<0>(args.problem_shape);
     }
-    auto problem_shape_MNKL = append<4>(problem_shape, 1);
+    auto problem_shape_MNKL = append<5>(problem_shape, 1);
 
     // Get SM count if needed, otherwise use user supplied SM count
     int sm_count = args.hw_info.sm_count;
@@ -284,7 +284,7 @@ public:
   static bool
   can_implement(Arguments const& args) {
     bool implementable = (args.mode == GemmUniversalMode::kGemm) or
-        (args.mode == GemmUniversalMode::kBatched && cute::rank(ProblemShape{}) == 4);
+        (args.mode == GemmUniversalMode::kBatched && cute::rank(ProblemShape{}) == 5); // 这里必须等于5，就是得按融合GEMM来写！
     if (!implementable) {
       CUTLASS_TRACE_HOST("  CAN IMPLEMENT: Arguments or Problem Shape don't meet the requirements.\n");
       return implementable;
@@ -506,7 +506,7 @@ public:
     } ();
 
     // Optionally append 1s until problem shape is rank-4 in case it is only rank-3 (MNK)
-    auto problem_shape_MNKL = append<4>(params.problem_shape, Int<1>{}); // problem_shape_MNKL: [2048, 2048, 2048, 1]
+    auto problem_shape_MNKL = append<5>(params.problem_shape, Int<1>{}); // problem_shape_MNKL: [2048, 2048, 2048, 1]
 
 
     // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
@@ -824,8 +824,7 @@ public:
 
     // Optionally append 1s until problem shape is rank-4 in case it is only rank-3 (MNK)
     // auto problem_shape_MNKL = append<4>(params.problem_shape, Int<1>{}); // problem_shape_MNKL: [2048, 2048, 2048, 1]
-    auto [M, N, K, L] = problem_shape_MNKL;
-    auto problem_shape_MNKL1 = cute::make_tuple(M, 1024, N, 1);
+
 
 
     // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
@@ -846,7 +845,7 @@ public:
     // Prepare and partition the input tensors. Expects a tuple of tensors where:
     // get<0>(load_inputs) is the tma tensor A after local tiling so that it has shape (BLK_M,BLK_K,m,k,l)
     // get<1>(load_inputs) is the tma tensor B after local tiling so that it has shape (BLK_N,BLK_K,n,k,l)
-    auto load_inputs1 = collective_mainloop1.load_init(problem_shape_MNKL1, params.mainloop);
+    auto load_inputs1 = collective_mainloop1.load_init(problem_shape_MNKL, params.mainloop);
     static_assert(cute::tuple_size_v<decltype(load_inputs1)> >= 2, "Output of load_init must have at least two elements (A, B)");
 
     // Extract out partitioned A and B.
@@ -892,7 +891,7 @@ public:
     //       auto blk_coord1 = make_coord(m_coord1, n_coord1, _, l_coord1);
 
     //       // Get the number of K tiles to compute for this work as well as the starting K tile offset of the work.
-    //       auto work_k_tile_count1 = TileScheduler::get_work_k_tile_count(work_tile_info1, problem_shape_MNKL1, blk_shape);  // 这里的blk_shape和之前一样，就不需要加1了
+    //       auto work_k_tile_count1 = TileScheduler::get_work_k_tile_count(work_tile_info1, problem_shape_MNKL, blk_shape);  // 这里的blk_shape和之前一样，就不需要加1了----------------->注意这里是problem_shape_MNKL，没有加上1哦
     //       auto work_k_tile_start1 = TileScheduler::get_work_k_tile_start(work_tile_info1);
     //       auto k_tile_iter1 = cute::make_coord_iterator(idx2crd(work_k_tile_start1, shape<3>(gA_mkl1)), shape<3>(gA_mkl1));
 
