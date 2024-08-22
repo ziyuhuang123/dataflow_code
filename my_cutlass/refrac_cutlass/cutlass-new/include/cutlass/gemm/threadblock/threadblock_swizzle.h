@@ -108,6 +108,7 @@ struct GemmIdentityThreadblockSwizzle {
   /// Computes CUDA grid dimensions given a size in units of logical tiles
   CUTLASS_HOST_DEVICE
   static dim3 get_grid_shape(GemmCoord tiled_shape) {
+    printf("enter temp_can/cutlass-new/include/cutlass/gemm/threadblock/threadblock_swizzle.h 111\n");
     int tile = 1 << get_log_tile(tiled_shape);
     return dim3(tiled_shape.m() * tile, (tiled_shape.n() + tile - 1) / tile, tiled_shape.k());
   }
@@ -182,6 +183,7 @@ struct GemmHorizontalThreadblockSwizzle {
   /// Computes CUDA grid dimensions given a size in units of logical tiles
   CUTLASS_HOST_DEVICE
   static dim3 get_grid_shape(GemmCoord tiled_shape) {
+    printf("enter temp_can/cutlass-new/include/cutlass/gemm/threadblock/threadblock_swizzle.h 222\n");
     return dim3(tiled_shape.n(), tiled_shape.m(), tiled_shape.k());
   }
 
@@ -223,6 +225,7 @@ struct GemmBatchedIdentityThreadblockSwizzle {
   /// Computes CUDA grid dimensions given a size in units of logical tiles
   CUTLASS_HOST_DEVICE
   static dim3 get_grid_shape(GemmCoord tiled_shape) {
+    printf("enter temp_can/cutlass-new/include/cutlass/gemm/threadblock/threadblock_swizzle.h 333\n");
     return dim3(tiled_shape.m(), tiled_shape.n(), tiled_shape.k());
   }
 
@@ -300,6 +303,7 @@ struct GemmSplitKIdentityThreadblockSwizzle {
   /// Computes CUDA grid dimensions given a size in units of logical tiles
   CUTLASS_HOST_DEVICE
   static dim3 get_grid_shape(GemmCoord tiled_shape) {
+    printf("enter temp_can/cutlass-new/include/cutlass/gemm/threadblock/threadblock_swizzle.h 444\n");
     int tile = 1 << get_log_tile(tiled_shape);
     return dim3(tiled_shape.m() * tile, (tiled_shape.n() + tile - 1) / tile, tiled_shape.k());
   }
@@ -356,6 +360,7 @@ struct GemmSplitKHorizontalThreadblockSwizzle {
   /// Computes CUDA grid dimensions given a size in units of logical tiles
   CUTLASS_HOST_DEVICE
   static dim3 get_grid_shape(GemmCoord tiled_shape) {
+    printf("enter temp_can/cutlass-new/include/cutlass/gemm/threadblock/threadblock_swizzle.h 555\n");
     return dim3(tiled_shape.n(), tiled_shape.m(), tiled_shape.k());
   }
 
@@ -407,6 +412,7 @@ struct GemvBatchedStridedThreadblockDefaultSwizzle {
   /// Computes CUDA grid dimensions given a size in units of logical tiles
   CUTLASS_HOST_DEVICE
   static dim3 get_grid_shape(BatchedGemmCoord tiled_shape) {
+    printf("enter temp_can/cutlass-new/include/cutlass/gemm/threadblock/threadblock_swizzle.h 666\n");
     return dim3(tiled_shape.n(), tiled_shape.batch(), tiled_shape.k());
   }
 

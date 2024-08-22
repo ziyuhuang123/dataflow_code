@@ -262,6 +262,35 @@ public:
       ProblemShape const& problem_shape,
       Arguments const& args,
       [[maybe_unused]] void* workspace) {
+
+
+
+    printf("ReuseSmemC_: %d\n", static_cast<int>(ReuseSmemC_));
+    printf("is_destination_supported: %d\n", static_cast<int>(is_destination_supported));
+    printf("is_source_supported=%d\n", is_source_supported);
+    printf("support_smem_reuse=%d\n", support_smem_reuse);
+    printf("StagesC: %d\n", StagesC);
+    printf("StagesD: %d\n", StagesD);
+    auto SmemLayoutC_dims = take<0,3>(SmemLayoutC{});
+    // 打印 SmemLayoutC 的三个维度
+    printf("SmemLayoutC dimensions: (%d, %d, %d)\n",    
+       size<0>(SmemLayoutC_dims),
+       size<1>(SmemLayoutC_dims),
+       size<2>(SmemLayoutC_dims));
+    printf("EpilogueTile dimensions: (%llu, %llu)\n",    
+       size<0>(EpilogueTile{}),
+       size<1>(EpilogueTile{}));
+    int CollectiveStorageWithC_smem_C_Size = sizeof(CollectiveStorageWithC::smem_C);
+    printf("CollectiveStorageWithC_smem_C_Size: %d\n", CollectiveStorageWithC_smem_C_Size);
+    printf("cosize_v<SmemLayoutC>: %d\n", static_cast<int>(cosize_v<SmemLayoutC>));
+    printf("Size of SmemElementC: %zu bytes\n", sizeof(SmemElementC));
+
+
+
+
+
+
+
     // Optionally append 1s until problem shape is rank-4 in case its is only rank-3 (MNK)
     auto problem_shape_MNKL = append<4>(problem_shape, 1);
     auto [M, N, K, L] = problem_shape_MNKL;
@@ -451,6 +480,18 @@ public:
     auto pld_callbacks = fusion_callbacks.get_producer_load_callbacks(pld_args);
     bool is_C_load_needed = is_source_supported && fusion_callbacks.is_C_load_needed();
 
+
+
+
+    if(blockIdx.x == 0 && blockIdx.y == 0&&threadIdx.x==383&&threadIdx.y==0) {
+        printf("is_source_supported: %d\n", is_source_supported);
+        printf("fusion_callbacks.is_C_load_needed(): %d\n", fusion_callbacks.is_C_load_needed());
+        printf("is_C_load_needed: %d, th=(%d, %d)\n", is_C_load_needed, threadIdx.x, threadIdx.y);
+        printf("is_destination_supported=%d\n", is_destination_supported);
+    }
+
+
+    
     // Predication for TMA load (one thread issues TMA load)
     bool issue_tma_load = cute::elect_one_sync();
 

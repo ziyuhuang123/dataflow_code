@@ -69,13 +69,13 @@ sm90_get_tma_dispatch_policy() {
   constexpr int EpiTiles = size(shape_div(take<0,2>(TileShapeMNK{}), EpilogueTileMN{}));
   constexpr int FragmentSize = size(EpilogueTileMN{}) / (detail::sm90_is_cooperative_v<Schedule> ? 256 : 128);
   // 8b residuals load fast and consume little smem, so the perf cost of waiting on stores to finish outweighs the cost of extra allocation
-  constexpr bool ReuseSmem = (sizeof_bits_v<ElementC> == sizeof_bits_v<ElementD>) && (sizeof_bits_v<ElementD> > 8);
+  // constexpr bool ReuseSmem = (sizeof_bits_v<ElementC> == sizeof_bits_v<ElementD>) && (sizeof_bits_v<ElementD> > 8);  // 原先的代码
+  constexpr bool ReuseSmem = false; // 4. 修改storage_C
   // TMA store delay performs worse with residual loads and compilicates tensormap updates for Ptr-Array GEMMs
   constexpr bool DelayTmaStore = is_void_v<ElementC> && !detail::sm90_is_tma_ptr_array_v<Schedule>;
   constexpr int StagesD = cute::min(EpiTiles, 2);
-  constexpr int StagesC = ReuseSmem ? cute::max(cute::min(EpiTiles, 4), StagesD+1)
-                                    : cute::min(EpiTiles, 4);
-
+  // constexpr int StagesC = ReuseSmem ? cute::max(cute::min(EpiTiles, 4), StagesD+1) : cute::min(EpiTiles, 4);// 原先的代码
+  constexpr int StagesC = 0; // 比如beta等于0，这里就可以设为0了。否则会浪费共享内存空间啊！4. 修改storage_C
   return cute::conditional_t<detail::sm90_is_tma_ptr_array_v<Schedule>,
                              Sm90PtrArrayTmaWarpSpecialized<StagesC, StagesD, FragmentSize, ReuseSmem, DelayTmaStore>,
                              Sm90TmaWarpSpecialized<StagesC, StagesD, FragmentSize, ReuseSmem, DelayTmaStore>>{};
@@ -487,8 +487,9 @@ struct CollectiveBuilder<
 private:
   using ElementD = cute::conditional_t<cute::is_void_v<ElementD_>,
                      fusion::get_element_aux_t<FusionOperation>, ElementD_>;
-  using EpilogueTile_MN =
-    decltype(detail::sm90_compute_tile_shape_or_override<ElementD, EpilogueTileType, Schedule, TileShape_MNK>());
+  // using EpilogueTile_MN =
+  //   decltype(detail::sm90_compute_tile_shape_or_override<ElementD, EpilogueTileType, Schedule, TileShape_MNK>());  // 原先的代码
+  using EpilogueTile_MN = decltype(take<0,2>(TileShape_MNK{})); // 这里之前肯定是有某种原因，默认判断去复用共享内存了。所以只有我希望的128*256的一半。目前暂时先写死成这样，以后有时间去理解一下原先的判断逻辑，再细改. // 4. 修改storage_C
   using DispatchPolicy =
     decltype(detail::sm90_get_tma_dispatch_policy<TileShape_MNK,EpilogueTile_MN,ElementC,ElementD,Schedule>());
 

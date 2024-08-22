@@ -36,9 +36,8 @@ endif()
 
 FetchContent_Declare(
   googletest
-  GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG        v1.14.0
-  )
+  SOURCE_DIR /home/zyhuang/temp_can/googletest
+)
 
 FetchContent_GetProperties(googletest)
 

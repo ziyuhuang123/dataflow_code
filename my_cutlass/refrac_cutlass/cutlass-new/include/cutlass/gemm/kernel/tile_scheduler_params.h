@@ -75,13 +75,14 @@ struct PersistentTileSchedulerSm90Params {
 
   uint64_t blocks_per_problem_ = 0;
   int32_t log_swizzle_size_ = 0;
-  RasterOrder raster_order_ = RasterOrder::AlongN;
+  RasterOrder raster_order_ = RasterOrder::AlongN;  // 似乎按时默认就是AlongN啊。除非额外指定。
 
   uint32_t problem_tiles_m_ = 0;
   uint32_t problem_tiles_n_ = 0;
   uint32_t problem_tiles_l_ = 0;
   uint32_t cluster_shape_m_ = 0;
   uint32_t cluster_shape_n_ = 0;
+  dim3 problem_block_number; // 2. 修改block计算顺序为横向
 
   // Initializes members. This variant of the method should only be used when
   // problem_shape and tile_shape contain modes of only rank 1.
@@ -128,6 +129,7 @@ struct PersistentTileSchedulerSm90Params {
     problem_tiles_l_ = problem_blocks.z;
     cluster_shape_m_ = cluster_shape.m();
     cluster_shape_n_ = cluster_shape.n();
+    problem_block_number = problem_blocks; // 2. 修改block计算顺序为横向
 
     RasterOrder raster_order = get_rasterization_order(
       problem_blocks_m,
@@ -170,7 +172,7 @@ struct PersistentTileSchedulerSm90Params {
     RasterOrderOptions raster_order_option,
     bool truncate_by_problem_size=true
     ) {
-
+    printf("enter temp_can/cutlass-new/include/cutlass/gemm/kernel/tile_scheduler_params.h 111\n");
     dim3 problem_blocks = get_tiled_cta_shape_mnl(problem_shape, cta_shape, cluster_shape);
     return get_grid_shape(
       problem_blocks,
@@ -195,7 +197,7 @@ struct PersistentTileSchedulerSm90Params {
     RasterOrderOptions raster_order_option,
     bool truncate_by_problem_size=true
     ) {
-
+    printf("enter temp_can/cutlass-new/include/cutlass/gemm/kernel/tile_scheduler_params.h 222\n");
     int const sm_count = hw_info.sm_count;
 
     // Round up to nearest multiple of swizzle_size along each mode
@@ -265,6 +267,9 @@ struct PersistentTileSchedulerSm90Params {
         launch_grid.y = possibly_truncate(
             cta_per_device       / cluster_shape.m(),
             problem_blocks_total / cluster_shape.m());
+        // launch_grid.y = (problem_blocks_m/cluster_shape.m()) * cluster_size;  //1. 消除persistent 打开这个选项就不是persistent了
+        launch_grid.y = (problem_blocks_m/cluster_shape.m()) * problem_blocks_n;  //1. 消除persistent 打开这个选项就不是persistent了
+        // printf("launch_grid=(%d, %d), problem_blocks_m=%d, problem_blocks_n=%d, cluster_shape.m()=%d, problem_blocks_total=%d\n", launch_grid.x, launch_grid.y, problem_blocks_m,problem_blocks_n, cluster_shape.m(), problem_blocks_total);
       }
       else {
         launch_grid.x = possibly_truncate(
@@ -828,7 +833,7 @@ struct PersistentTileSchedulerSm90StreamKParams {
     int max_swizzle_size,
     RasterOrderOptions raster_order_option
   ) {
-
+    printf("enter temp_can/cutlass-new/include/cutlass/gemm/kernel/tile_scheduler_params.h 333\n");
     dim3 problem_blocks = UnderlyingParams::get_tiled_cta_shape_mnl(problem_shape, cta_shape, cluster_shape);
 
     return get_grid_shape(
@@ -852,7 +857,7 @@ struct PersistentTileSchedulerSm90StreamKParams {
     int max_swizzle_size,
     RasterOrderOptions raster_order_option
   ) {
-
+    printf("enter temp_can/cutlass-new/include/cutlass/gemm/kernel/tile_scheduler_params.h 444\n");
     // Call into the underlying get_grid_shape method, but do not allow the grid shape returned
     // to be truncated based on the number of output tiles in the problem.
     return UnderlyingParams::get_grid_shape(
@@ -1407,7 +1412,7 @@ struct PersistentTileSchedulerSm90GroupParams {
     int max_swizzle_size,
     RasterOrderOptions raster_order_option,
     bool truncate_by_problem_size=true) {
-
+    printf("enter temp_can/cutlass-new/include/cutlass/gemm/kernel/tile_scheduler_params.h 555\n");
     int const sm_count = hw_info.sm_count;
 
     // Round up to nearest multiple of swizzle_size along each mode
@@ -1450,6 +1455,7 @@ struct PersistentTileSchedulerSm90GroupParams {
       else {
         launch_grid.x = possibly_truncate(sm_count, problem_blocks_total);
       }
+      printf("111\n");
     }
     else {
       // Optimal grid size calculation is based on
@@ -1470,16 +1476,20 @@ struct PersistentTileSchedulerSm90GroupParams {
       cta_per_device = sm_count < cta_per_device ? sm_count : cta_per_device;
 
       if (raster_order == RasterOrder::AlongN) {
-        launch_grid.y = possibly_truncate(
-            cta_per_device       / cluster_shape.m(),
-            problem_blocks_total / cluster_shape.m());
+        // launch_grid.y = possibly_truncate(
+        //     cta_per_device       / cluster_shape.m(),
+        //     problem_blocks_total / cluster_shape.m());
+        launch_grid.y = (problem_blocks_m/cluster_shape.m()) * cluster_size;  // 打开这个选项就不是persistent了
+        // printf("launch_grid=(%d, %d), problem_blocks_m=%d, cluster_shape.m()=%d, problem_blocks_total=%d\n", launch_grid.x, launch_grid.y, problem_blocks_m, cluster_shape.m(), problem_blocks_total);
       }
       else {
         launch_grid.x = possibly_truncate(
             cta_per_device       / cluster_shape.n(),
             problem_blocks_total / cluster_shape.n());
+        printf("temp_can/cutlass-new/include/cutlass/gemm/kernel/tile_scheduler_params.h enter M\n");
       }
     }
+    printf("222\n");
     return launch_grid;
   }
 

@@ -285,6 +285,7 @@ public:
       args.max_swizzle_size = 1 << params.scheduler.log_swizzle_size_;
     }
     args.raster_order = params.scheduler.raster_order_ == TileScheduler::RasterOrder::AlongN ? TileScheduler::RasterOrderOptions::AlongN : TileScheduler::RasterOrderOptions::AlongM;
+    printf("enter temp_can/cutlass-new/include/cutlass/gemm/kernel/sm90_gemm_tma_warpspecialized_cooperative.hpp, bool=%d\n", params.scheduler.raster_order_ == TileScheduler::RasterOrder::AlongN);
     return TileScheduler::get_grid_shape(params.problem_shape, TileShape{}, ClusterShape{}, params.hw_info, args);
   }
 
@@ -449,7 +450,7 @@ public:
 
       // Mainloop Producer Warp
       if (producer_warp_role == ProducerWarpRole::Mainloop) {
-        bool do_load_order_arrive = true;
+        // bool do_load_order_arrive = true;
         while (work_tile_info.is_valid()) {
           if (!TileScheduler::valid_warpgroup_in_work_tile(work_tile_info)) {
             work_tile_info = scheduler.fetch_next_work(work_tile_info);
@@ -481,11 +482,11 @@ public:
           // Update starting pipeline state for the next tile
           mainloop_pipe_producer_state.advance(work_k_tile_count);
 
-          // Signal for the epilogue load warp to begin
-          if (do_load_order_arrive) {
-            load_order_barrier.arrive();
-            do_load_order_arrive = false;
-          }
+          // // Signal for the epilogue load warp to begin
+          // if (do_load_order_arrive) {
+          //   load_order_barrier.arrive();
+          //   do_load_order_arrive = false;
+          // }
 
           // Get next work tile
           work_tile_info = scheduler.fetch_next_work(work_tile_info);
@@ -496,41 +497,40 @@ public:
 
       } // Mainloop Producer Warp End
 
-      // Epilogue Producer Warp
-      else if (producer_warp_role == ProducerWarpRole::Epilogue && collective_epilogue.is_producer_load_needed()) {
+      // // Epilogue Producer Warp  // 在example49的多个例子里，注释掉这里不影响正确性
+      // else if (producer_warp_role == ProducerWarpRole::Epilogue && collective_epilogue.is_producer_load_needed()) {
+      //   if (!TileScheduler::requires_separate_reduction(params.scheduler) && work_tile_info.is_valid()) {
+      //     load_order_barrier.wait();
+      //   }
+      //   while (work_tile_info.is_valid()) {
+      //     if (TileScheduler::compute_epilogue(work_tile_info, params.scheduler)) {
+      //       // Compute m_coord, n_coord, l_coord with the post-tiled m-shape and n-shape
+      //       auto m_coord = idx2crd(work_tile_info.M_idx, shape<2>(gA_mkl));
+      //       auto n_coord = idx2crd(work_tile_info.N_idx, shape<2>(gB_nkl));
+      //       auto l_coord = idx2crd(work_tile_info.L_idx, shape<4>(gB_nkl));
+      //       auto blk_coord = make_coord(m_coord, n_coord, _, l_coord);
 
-        if (!TileScheduler::requires_separate_reduction(params.scheduler) && work_tile_info.is_valid()) {
-          load_order_barrier.wait();
-        }
-        while (work_tile_info.is_valid()) {
-          if (TileScheduler::compute_epilogue(work_tile_info, params.scheduler)) {
-            // Compute m_coord, n_coord, l_coord with the post-tiled m-shape and n-shape
-            auto m_coord = idx2crd(work_tile_info.M_idx, shape<2>(gA_mkl));
-            auto n_coord = idx2crd(work_tile_info.N_idx, shape<2>(gB_nkl));
-            auto l_coord = idx2crd(work_tile_info.L_idx, shape<4>(gB_nkl));
-            auto blk_coord = make_coord(m_coord, n_coord, _, l_coord);
+      //       epi_load_pipe_producer_state =
+      //       collective_epilogue.load(
+      //         epi_load_pipeline,
+      //         epi_load_pipe_producer_state,
+      //         problem_shape_MNKL,
+      //         blk_shape,
+      //         blk_coord,
+      //         tiled_mma,
+      //         lane_idx,
+      //         shared_storage.tensors.epilogue,
+      //         work_tile_info.reduction_subtile_idx()
+      //       );
+      //     }
 
-            epi_load_pipe_producer_state =
-            collective_epilogue.load(
-              epi_load_pipeline,
-              epi_load_pipe_producer_state,
-              problem_shape_MNKL,
-              blk_shape,
-              blk_coord,
-              tiled_mma,
-              lane_idx,
-              shared_storage.tensors.epilogue,
-              work_tile_info.reduction_subtile_idx()
-            );
-          }
+      //     // Get next work tile
+      //     work_tile_info = scheduler.fetch_next_work(work_tile_info);
+      //   } // Scheduler work fetch loop
 
-          // Get next work tile
-          work_tile_info = scheduler.fetch_next_work(work_tile_info);
-        } // Scheduler work fetch loop
-
-        // Make sure all Consumer Warp Groups have been waited upon
-        collective_epilogue.load_tail(epi_load_pipeline, epi_load_pipe_producer_state);
-      } // Epilogue Producer Warp End
+      //   // Make sure all Consumer Warp Groups have been waited upon
+      //   collective_epilogue.load_tail(epi_load_pipeline, epi_load_pipe_producer_state);
+      // } // Epilogue Producer Warp End
     } // Producer Warp Group End
 
     else if (warp_group_role == WarpGroupRole::Consumer0 || warp_group_role == WarpGroupRole::Consumer1) {

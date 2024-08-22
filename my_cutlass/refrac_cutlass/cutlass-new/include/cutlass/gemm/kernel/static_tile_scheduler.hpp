@@ -53,6 +53,8 @@ class StaticPersistentTileScheduler {
 private:
   uint64_t current_work_linear_idx_;
   uint64_t total_grid_size_;
+  uint64_t total_cluster_size_; // 2. 修改block计算顺序为横向
+  int cluster_jump_count; // 2. 修改block计算顺序为横向
 
 public:
   struct WorkTileInfo {
@@ -138,13 +140,34 @@ public:
     // like blockIdx and gridDim, with __CUDA_ARCH__.
 #if defined(__CUDA_ARCH__)
     if (params_.raster_order_ == RasterOrder::AlongN) {
-      current_work_linear_idx_ = uint64_t(blockIdx.x) + uint64_t(blockIdx.y) * uint64_t(gridDim.x);
+      // current_work_linear_idx_ = uint64_t(blockIdx.x) + uint64_t(blockIdx.y) * uint64_t(gridDim.x);  // 原先的代码
+      current_work_linear_idx_ = uint64_t(blockIdx.y); //1. 消除persistent 2. 修改block计算顺序为横向
+
+
+
+
+      // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
+      //   printf("enter Raster N\n");
+
+      //   printf("block_id_in_cluster.y = %llu\n", uint64_t(cute::block_id_in_cluster().y));
+      //   printf("cluster_id_in_grid.y = %llu\n", uint64_t(cute::cluster_id_in_grid().y));
+      //   printf("problem_block_number.y = %llu\n", uint64_t(scheduler_params.problem_block_number.y));
+      //   printf("current_work_linear_idx_ = %llu\n", current_work_linear_idx_);
+      // }
     }
     else {
+      // if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==0&&threadIdx.y==0){
+      //   printf("enter Raster M\n");
+      // }
       current_work_linear_idx_ = uint64_t(blockIdx.x) * uint64_t(gridDim.y) + uint64_t(blockIdx.y);
     }
 
     total_grid_size_ = uint64_t(gridDim.x) * uint64_t(gridDim.y) * uint64_t(gridDim.z);
+
+    //2. 修改block计算顺序为横向----这个其实对当前代码没有意义。只是以后要再修为persistent的时候可以用到。
+    cluster_jump_count = 0;
+    total_cluster_size_ = uint64_t(cluster_shape().x) * uint64_t(cluster_shape().y) * uint64_t(cluster_shape().z);
+
 #else
     CUTLASS_ASSERT(false && "This line should never be reached");
 #endif
@@ -167,22 +190,22 @@ public:
   CUTLASS_DEVICE
   WorkTileInfo
   get_current_work_for_linear_idx(uint64_t linear_idx) const {
-    if (linear_idx >= scheduler_params.blocks_per_problem_) {
+    // if (linear_idx >= scheduler_params.blocks_per_problem_) {
+    //   return WorkTileInfo::invalid_work_tile();
+    // }  // 原先的代码
+
+    if(linear_idx>uint64_t(blockIdx.y)){
       return WorkTileInfo::invalid_work_tile();
-    }
+    }  //1. 消除persistent
 
     // Map worker's linear index into the CTA tiled problem shape to the corresponding MNL indices
     uint64_t work_idx_l, remainder;
     scheduler_params.divmod_batch_(work_idx_l, remainder, linear_idx);
-
+// work_idx_l 是 linear_idx 除以 problem_blocks_m * problem_blocks_n 的商。
+// remainder 是 linear_idx 除以 problem_blocks_m * problem_blocks_n 的余数。
     uint64_t blk_per_grid_dim = scheduler_params.divmod_cluster_shape_minor_.divide(remainder);
 
-    auto [work_idx_m, work_idx_n] = Subclass::get_work_idx_m_and_n(blk_per_grid_dim,
-                                                         scheduler_params.divmod_cluster_shape_major_,
-                                                         scheduler_params.divmod_cluster_shape_minor_,
-                                                         scheduler_params.divmod_cluster_blk_major_,
-                                                         scheduler_params.log_swizzle_size_,
-                                                         scheduler_params.raster_order_);
+    auto [work_idx_m, work_idx_n] = Subclass::get_work_idx_m_and_n(blk_per_grid_dim, scheduler_params.divmod_cluster_shape_major_, scheduler_params.divmod_cluster_shape_minor_, scheduler_params.divmod_cluster_blk_major_, scheduler_params.log_swizzle_size_, scheduler_params.raster_order_);
 
     return {work_idx_m, work_idx_n, static_cast<int32_t>(work_idx_l), true};
   }
@@ -190,7 +213,7 @@ public:
   CUTLASS_DEVICE
   void
   advance_to_next_work(uint32_t advance_count = 1) {
-    current_work_linear_idx_ += total_grid_size_ * uint64_t(advance_count);
+    current_work_linear_idx_ += total_grid_size_ * uint64_t(advance_count); // 原先的代码
   }
 
   // Computes the linear index within a batch given M and N tile offsets within the batch.
