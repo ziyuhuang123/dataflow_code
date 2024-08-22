@@ -221,6 +221,25 @@ struct Options {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+template <typename Element, typename Layout>
+bool initialize_block_fixed_value(cutlass::DeviceAllocation<Element>& tensor, Element val, int rows, int columns) {
+
+    // 创建 MatrixCoord 来表示矩阵的尺寸
+    typename Layout::TensorCoord extent(rows, columns);
+
+    // 使用 tensor 的设备指针和布局创建一个 TensorView 对象
+    auto tensor_view = cutlass::make_TensorView<Element, Layout>(
+        tensor.get(),   // 获取设备指针
+        Layout(extent), // 创建布局
+        extent          // 张量的范围
+    );
+
+    // 使用 TensorFill 函数将 tensor 填充为指定的固定值
+    cutlass::reference::device::TensorFill(tensor_view, val);
+
+    return true;
+}
+
 /// Helper to initialize a block of device data
 template <class Element>
 bool initialize_block(
@@ -306,7 +325,7 @@ struct ExampleRunner {
   static constexpr int AlignmentD = 16 / sizeof(ElementD);
   static constexpr int Alignment_gemm1_weight = 16 / sizeof(Element_gemm1_weight);
 
-  
+
   static_assert(not UseCustomEVT ||
     (cute::is_same_v<EpilogueScheduleType, cutlass::epilogue::TmaWarpSpecialized> ||
      cute::is_same_v<EpilogueScheduleType, cutlass::epilogue::TmaWarpSpecializedCooperative>),
@@ -351,24 +370,35 @@ struct ExampleRunner {
       cute::conditional_t<UseCustomEVT, CustomEVT, DefaultOperation>
     >::CollectiveOp;
   // 这里见到epilogue和mainloop的ClusterShape不一样的情况，非常奇怪。。。有时间仔细想想看吧。
+  // using CollectiveMainloop = typename cutlass::gemm::collective::CollectiveBuilder<
+  //     cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
+  //     ElementA, LayoutA, AlignmentA,
+  //     ElementB, LayoutB, AlignmentB,
+  //     ElementAccumulator,
+  //     TileShape, ClusterShape,
+  //     cute::conditional_t<cute::is_same_v<StageCountType, cutlass::gemm::collective::StageCountAuto>,
+  //         cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(sizeof(typename CollectiveEpilogue::SharedStorage))>,
+  //         StageCountType>,
+  //     MainloopScheduleType
+  //   >::CollectiveOp;
+
   using CollectiveMainloop = typename cutlass::gemm::collective::CollectiveBuilder<
       cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
       ElementA, LayoutA, AlignmentA,
       ElementB, LayoutB, AlignmentB,
+      Element_gemm1_weight, Layout_gemm1_weight, Alignment_gemm1_weight,
       ElementAccumulator,
       TileShape, ClusterShape,
-      cute::conditional_t<cute::is_same_v<StageCountType, cutlass::gemm::collective::StageCountAuto>,
-          cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(sizeof(typename CollectiveEpilogue::SharedStorage))>,
-          StageCountType>,
+      cute::conditional_t<cute::is_same_v<StageCountType,         cutlass::gemm::collective::StageCountAuto>, cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(sizeof(typename CollectiveEpilogue::SharedStorage))>, StageCountType>,
       MainloopScheduleType
-    >::CollectiveOp;
+    >::CollectiveOp; // 3. 创建gemm1_weight
 
   using GemmKernel = cutlass::gemm::kernel::GemmUniversal<
-      Shape<int,int,int,int>,
+      Shape<int,int,int,int,int>,
       CollectiveMainloop,
       CollectiveEpilogue,
       TileSchedulerType
-  >;
+  >;  // 这里增加了Shape后面一个int，为了GEMM1 3. 创建gemm1_weight
 
   using Gemm = cutlass::gemm::device::GemmUniversalAdapter<GemmKernel>;
 
@@ -378,11 +408,14 @@ struct ExampleRunner {
   using StrideB = typename Gemm::GemmKernel::StrideB;
   using StrideC = typename Gemm::GemmKernel::StrideC;
   using StrideD = typename Gemm::GemmKernel::StrideD;
+  using Stride_gemm1_weight = typename Gemm::GemmKernel::Stride_gemm1_weight;
+  
 
   using LayoutTagA = cutlass::gemm::detail::StrideToLayoutTagA_t<StrideA>;
   using LayoutTagB = cutlass::gemm::detail::StrideToLayoutTagB_t<StrideB>;
   using LayoutTagC = cutlass::gemm::detail::StrideToLayoutTagC_t<StrideC>;
   using LayoutTagD = cutlass::gemm::detail::StrideToLayoutTagC_t<StrideD>;
+  using LayoutTag_gemm1_weight = cutlass::gemm::detail::StrideToLayoutTagB_t<Stride_gemm1_weight>; // 这个跟B学！毕竟是权重矩阵
 
   //
   // Data members
@@ -393,12 +426,14 @@ struct ExampleRunner {
   StrideB stride_B;
   StrideC stride_C;
   StrideD stride_D;
+  Stride_gemm1_weight stride_gemm1_weight;
   uint64_t seed = 0;
 
   cutlass::DeviceAllocation<typename Gemm::ElementA> block_A;
   cutlass::DeviceAllocation<typename Gemm::ElementB> block_B;
   cutlass::DeviceAllocation<typename Gemm::ElementC> block_C;
   cutlass::DeviceAllocation<typename Gemm::ElementD> block_D;
+  cutlass::DeviceAllocation<typename Gemm::Element_gemm1_weight> block_gemm1_weight;
   cutlass::DeviceAllocation<typename Gemm::ElementD> block_ref_D;
 
   //
@@ -406,7 +441,7 @@ struct ExampleRunner {
   //
 
   bool verify(const ProblemShapeType& problem_size, float alpha, float beta) {
-    auto [M, N, K, L] = problem_size;
+    auto [M, N, K, L, T] = problem_size;
 
     cutlass::TensorRef ref_A(block_A.get(), Gemm::LayoutA::packed({M, K}));
     cutlass::TensorRef ref_B(block_B.get(), Gemm::LayoutB::packed({K, N}));
@@ -442,38 +477,53 @@ struct ExampleRunner {
     bool passed = cutlass::reference::device::BlockCompareEqual(block_ref_D.get(), block_D.get(), block_D.size());
 
     return passed;
-  }
+  } // 不太必要改这里。只需要做两次verify即可
 
   /// Initialize operands to be used in the GEMM and reference GEMM
   void initialize(const ProblemShapeType& problem_size) {
-    auto problem_shape_MNKL = cute::append<4>(problem_size, 1);
-    auto [M, N, K, L] = problem_shape_MNKL;
+    auto problem_shape_MNKL = cute::append<5>(problem_size, 1);
+    auto [M, N, K, L, T] = problem_shape_MNKL;
 
     stride_A = cutlass::make_cute_packed_stride(StrideA{}, cute::make_shape(M, K, L));
     stride_B = cutlass::make_cute_packed_stride(StrideB{}, cute::make_shape(N, K, L));
     stride_C = cutlass::make_cute_packed_stride(StrideC{}, cute::make_shape(M, N, L));
     stride_D = cutlass::make_cute_packed_stride(StrideD{}, cute::make_shape(M, N, L));
+    stride_gemm1_weight = cutlass::make_cute_packed_stride(Stride_gemm1_weight{}, cute::make_shape(N, T, L));
+
 
     block_A.reset(M * K * L);
     block_B.reset(K * N * L);
     block_C.reset(M * N * L);
     block_D.reset(M * N * L);
     block_ref_D.reset(M * N * L);
+    block_gemm1_weight.reset(N * T * L);
 
     initialize_block(block_A, seed + 2023);
     initialize_block(block_B, seed + 2022);
     initialize_block(block_C, seed + 2021);
+    initialize_block(block_gemm1_weight, seed + 2020);
+
+    // // 初始化 block_A (M x K)
+    // initialize_block_fixed_value<ElementA, LayoutA>(block_A, ElementA(1.0f), M, K);
+
+    // // 初始化 block_B (K x N)
+    // initialize_block_fixed_value<ElementB, LayoutB>(block_B, ElementB(1.0f), K, N);
+
+    // // 初始化 block_C (M x N)
+    // initialize_block_fixed_value<ElementC, LayoutC>(block_C, ElementC(0.0f), M, N);
+    // initialize_block_fixed_value<Element_gemm1_weight, Layout_gemm1_weight>(block_gemm1_weight, Element_gemm1_weight(0.0f), N, T);
+    
   }
 
   bool run(const Options& options, const cutlass::KernelHardwareInfo& hw_info) {
-    ProblemShapeType problem_size = ProblemShapeType{options.m, options.n, options.k, options.l};
+    ProblemShapeType problem_size = ProblemShapeType{options.m, options.n, options.k, options.l, options.t};
 
     initialize(problem_size);
 
     typename Gemm::Arguments arguments{
       cutlass::gemm::GemmUniversalMode::kGemm,
       problem_size,
-      {block_A.get(), stride_A, block_B.get(), stride_B},
+      {block_A.get(), stride_A, block_B.get(), stride_B, block_gemm1_weight.get(), stride_gemm1_weight},
       {{}, // epilogue.thread
        block_C.get(), stride_C, block_D.get(), stride_D},
       hw_info

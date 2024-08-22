@@ -266,7 +266,7 @@ public:
     auto cta_n = cute::size(cute::ceil_div(cute::shape<1>(problem_shape_mnkl), cute::shape<1>(cta_shape)));
 
     return Params::get_tiled_cta_shape_mnl(
-      to_gemm_coord(problem_shape_mnkl),
+      to_gemm_coord(cute::take<0, 4>(problem_shape_mnkl)),
       to_gemm_coord(cluster_shape),
       cta_m, cta_n
     );
@@ -297,7 +297,7 @@ public:
     Arguments arguments,
     bool truncate_by_problem_size=true) {
 
-    auto problem_shape_mnkl = cute::append<4>(problem_shape_mnk, cute::Int<1>{});
+    auto problem_shape_mnkl = cute::append<5>(problem_shape_mnk, cute::Int<1>{});
     dim3 problem_blocks = get_tiled_cta_shape_mnl(problem_shape_mnkl, cta_shape, cluster_shape);
 
     return Params::get_grid_shape(
@@ -321,7 +321,7 @@ public:
     ClusterShape cluster_shape,
     KernelHardwareInfo hw_info) {
 
-    auto problem_shape_mnkl = cute::append<4>(problem_shape_mnk, cute::Int<1>{});
+    auto problem_shape_mnkl = cute::append<5>(problem_shape_mnk, cute::Int<1>{});
     dim3 problem_blocks = get_tiled_cta_shape_mnl(problem_shape_mnkl, cta_shape, cluster_shape);
 
     Arguments args{};

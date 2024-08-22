@@ -172,7 +172,6 @@ struct PersistentTileSchedulerSm90Params {
     RasterOrderOptions raster_order_option,
     bool truncate_by_problem_size=true
     ) {
-    printf("enter temp_can/cutlass-new/include/cutlass/gemm/kernel/tile_scheduler_params.h 111\n");
     dim3 problem_blocks = get_tiled_cta_shape_mnl(problem_shape, cta_shape, cluster_shape);
     return get_grid_shape(
       problem_blocks,
@@ -197,7 +196,6 @@ struct PersistentTileSchedulerSm90Params {
     RasterOrderOptions raster_order_option,
     bool truncate_by_problem_size=true
     ) {
-    printf("enter temp_can/cutlass-new/include/cutlass/gemm/kernel/tile_scheduler_params.h 222\n");
     int const sm_count = hw_info.sm_count;
 
     // Round up to nearest multiple of swizzle_size along each mode
@@ -833,7 +831,6 @@ struct PersistentTileSchedulerSm90StreamKParams {
     int max_swizzle_size,
     RasterOrderOptions raster_order_option
   ) {
-    printf("enter temp_can/cutlass-new/include/cutlass/gemm/kernel/tile_scheduler_params.h 333\n");
     dim3 problem_blocks = UnderlyingParams::get_tiled_cta_shape_mnl(problem_shape, cta_shape, cluster_shape);
 
     return get_grid_shape(
@@ -857,7 +854,6 @@ struct PersistentTileSchedulerSm90StreamKParams {
     int max_swizzle_size,
     RasterOrderOptions raster_order_option
   ) {
-    printf("enter temp_can/cutlass-new/include/cutlass/gemm/kernel/tile_scheduler_params.h 444\n");
     // Call into the underlying get_grid_shape method, but do not allow the grid shape returned
     // to be truncated based on the number of output tiles in the problem.
     return UnderlyingParams::get_grid_shape(
@@ -1412,7 +1408,6 @@ struct PersistentTileSchedulerSm90GroupParams {
     int max_swizzle_size,
     RasterOrderOptions raster_order_option,
     bool truncate_by_problem_size=true) {
-    printf("enter temp_can/cutlass-new/include/cutlass/gemm/kernel/tile_scheduler_params.h 555\n");
     int const sm_count = hw_info.sm_count;
 
     // Round up to nearest multiple of swizzle_size along each mode

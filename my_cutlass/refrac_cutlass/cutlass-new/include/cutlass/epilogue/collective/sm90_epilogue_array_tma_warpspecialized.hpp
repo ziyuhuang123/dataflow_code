@@ -345,7 +345,7 @@ public:
       ProblemShape const& problem_shape,
       [[maybe_unused]] Arguments const& args) {
     auto problem_shape_MNKL = append<4>(problem_shape.get_host_problem_shape(), 1);
-    auto [M,N,K,L] = problem_shape_MNKL;
+    auto [M,N,K,L,T] = problem_shape_MNKL;
 
     bool implementable = true;
     if constexpr (is_destination_supported) {
@@ -444,7 +444,7 @@ public:
     using namespace cute;
 
     // Indexing variables
-    auto [M, N, K, L] = problem_shape_mnkl;
+    auto [M, N, K, L, T] = problem_shape_mnkl;
     auto [m_coord, n_coord, k_coord, l_coord] = tile_coord_mnkl;
 
     static_assert(!is_im2col_D, "Do not support im2col");
@@ -577,7 +577,7 @@ public:
     static_assert(rank(TileCoordMNKL{}) == 4, "TileCoordMNKL must be rank 4");
 
     // Indexing variables
-    auto [M, N, K, L] = problem_shape_mnkl;
+    auto [M, N, K, L, T] = problem_shape_mnkl;
     auto [m_coord, n_coord, k_coord, l_coord] = tile_coord_mnkl;
 
 

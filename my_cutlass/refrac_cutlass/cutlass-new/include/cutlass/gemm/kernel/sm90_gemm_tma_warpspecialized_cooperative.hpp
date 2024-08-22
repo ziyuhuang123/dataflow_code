@@ -69,8 +69,8 @@ public:
   // Type Aliases
   //
   using ProblemShape = ProblemShape_;
-  static_assert(cute::rank(ProblemShape{}) == 3 or cute::rank(ProblemShape{}) == 4,
-    "ProblemShape{} should be <M,N,K> or <M,N,K,L>");
+  static_assert(cute::rank(ProblemShape{}) == 3 or cute::rank(ProblemShape{}) == 4 or cute::rank(ProblemShape{}) == 5,
+    "ProblemShape{} should be <M,N,K> or <M,N,K,L>"); // 4. 修改storage_C
   // Mainloop derived types
   using CollectiveMainloop = CollectiveMainloop_;
   using TileShape = typename CollectiveMainloop::TileShape;
@@ -80,6 +80,10 @@ public:
   using StrideA   = typename CollectiveMainloop::StrideA;
   using ElementB  = typename CollectiveMainloop::ElementB;
   using StrideB   = typename CollectiveMainloop::StrideB;
+
+  using Element_gemm1_weight  = typename CollectiveMainloop::Element_gemm1_weight;
+  using Stride_gemm1_weight   = typename CollectiveMainloop::Stride_gemm1_weight;
+
   using DispatchPolicy = typename CollectiveMainloop::DispatchPolicy;
   using ElementAccumulator = typename CollectiveMainloop::ElementAccumulator;
   using ClusterShape = typename DispatchPolicy::ClusterShape;
@@ -174,7 +178,7 @@ public:
       get<0>(problem_shape) = get<1>(args.problem_shape);
       get<1>(problem_shape) = get<0>(args.problem_shape);
     }
-    auto problem_shape_MNKL = append<4>(problem_shape, 1);
+    auto problem_shape_MNKL = append<5>(problem_shape, 1);
 
     // Get SM count if needed, otherwise use user supplied SM count
     int sm_count = args.hw_info.sm_count;
@@ -223,7 +227,7 @@ public:
   static bool
   can_implement(Arguments const& args) {
     bool implementable = (args.mode == GemmUniversalMode::kGemm) or
-        (args.mode == GemmUniversalMode::kBatched && cute::rank(ProblemShape{}) == 4);
+        (args.mode == GemmUniversalMode::kBatched && cute::rank(ProblemShape{}) == 5); // 4. 修改storage_C
     if (!implementable) {
       CUTLASS_TRACE_HOST("  CAN IMPLEMENT: Arguments or Problem Shape don't meet the requirements.\n");
       return implementable;
@@ -285,7 +289,7 @@ public:
       args.max_swizzle_size = 1 << params.scheduler.log_swizzle_size_;
     }
     args.raster_order = params.scheduler.raster_order_ == TileScheduler::RasterOrder::AlongN ? TileScheduler::RasterOrderOptions::AlongN : TileScheduler::RasterOrderOptions::AlongM;
-    printf("enter temp_can/cutlass-new/include/cutlass/gemm/kernel/sm90_gemm_tma_warpspecialized_cooperative.hpp, bool=%d\n", params.scheduler.raster_order_ == TileScheduler::RasterOrder::AlongN);
+    // printf("enter temp_can/cutlass-new/include/cutlass/gemm/kernel/sm90_gemm_tma_warpspecialized_cooperative.hpp, bool=%d\n", params.scheduler.raster_order_ == TileScheduler::RasterOrder::AlongN);
     return TileScheduler::get_grid_shape(params.problem_shape, TileShape{}, ClusterShape{}, params.hw_info, args);
   }
 
@@ -418,7 +422,7 @@ public:
     } ();
 
     // Optionally append 1s until problem shape is rank-4 in case it is only rank-3 (MNK)
-    auto problem_shape_MNKL = append<4>(params.problem_shape, Int<1>{});
+    auto problem_shape_MNKL = append<5>(params.problem_shape, Int<1>{});
 
     // Get the appropriate blocks for this thread block -- potential for thread block locality
     TiledMma tiled_mma;

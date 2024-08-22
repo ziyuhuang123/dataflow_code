@@ -96,6 +96,7 @@ public:
   using ElementB = typename GemmKernel::ElementB;
   using ElementC = typename GemmKernel::ElementC;
   using ElementD = typename GemmKernel::ElementD;
+  using Element_gemm1_weight = typename GemmKernel::Element_gemm1_weight;
   using ElementAccumulator = typename GemmKernel::ElementAccumulator;
   using DispatchPolicy = typename GemmKernel::DispatchPolicy;
   using CollectiveMainloop = typename GemmKernel::CollectiveMainloop;
