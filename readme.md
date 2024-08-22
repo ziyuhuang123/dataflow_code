@@ -287,3 +287,13 @@ cusync 是不是可以总结为没做kernel fusion，是通过信号量/wait ker
 2. 杨杰学长提醒我，在Hopper的cluster里，smid和block似乎能对应上，和L2数据流能搞到一起。
 
 但是上述两点都是L2相关的，我暂时优先做L1的。所以以后再看啦
+
+
+0822
+上午开组会。老师让我和子汉合到一起为一篇工作。
+下午重构cutlass。因为之前的工作改的比较乱。就是在全新的cutlass上执行以下四步修改：
+
+1. 消除persistent
+2. 修改block计算顺序为横向
+3. 创建gemm1_weight
+4. 修改storage_C
