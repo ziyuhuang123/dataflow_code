@@ -372,10 +372,11 @@ struct ExampleRunner {
       cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
       ElementA, LayoutA, AlignmentA,
       ElementB, LayoutB, AlignmentB,
+      Element_gemm1_weight, Layout_gemm1_weight, Alignment_gemm1_weight,
       ElementAccumulator,
       TileShape, ClusterShape,
       cute::conditional_t<cute::is_same_v<StageCountType,         cutlass::gemm::collective::StageCountAuto>, cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(sizeof(typename CollectiveEpilogue::SharedStorage))>, StageCountType>,
-      MainloopScheduleType, ElementD
+      MainloopScheduleType
     >::CollectiveOp;
 // 按理说上面都应该加入gemm1_weight的layout什么的。。。不过我偷懒。。暂时先借用B的一用吧。。。。好吧，最后还是加上_gemm1_weight了。  14
 
@@ -508,14 +509,11 @@ struct ExampleRunner {
     typename Gemm::Arguments arguments{
       cutlass::gemm::GemmUniversalMode::kGemm,
       problem_size,
-      {block_A.get(), stride_A, block_B.get(), stride_B},
+      {block_A.get(), stride_A, block_B.get(), stride_B, block_gemm1_weight.get(), stride_gemm1_weight},
       {{}, // epilogue.thread
        block_C.get(), stride_C, block_D.get(), stride_D},
       hw_info
     };  // 对应cutlass/include/cutlass/gemm/kernel/sm90_gemm_tma_warpspecialized_cooperative.hpp的struct Arguments {
-
-
-// , block_gemm1_weight.get(), stride_gemm1_weight
 
 
 

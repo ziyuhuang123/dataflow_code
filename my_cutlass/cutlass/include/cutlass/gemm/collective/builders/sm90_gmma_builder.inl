@@ -179,8 +179,8 @@ is_warpspecialized_transpose_B(){
   // class Element_gemm1_weight,
   // class GmemLayout_gemm1_weight_Tag,
   // class Alignment_gemm1_weight,
-  //   Element_gemm1_weight,
-  //   GmemLayout_gemm1_weight_Tag,
+    // Element_gemm1_weight,
+    // GmemLayout_gemm1_weight_Tag,
     // Alignment_gemm1_weight,
 
 template <
@@ -190,12 +190,14 @@ template <
   class ElementB,
   class GmemLayoutBTag,
   int AlignmentB,
+  class Element_gemm1_weight,
+  class GmemLayout_gemm1_weight_Tag,
+  int Alignment_gemm1_weight,
   class ElementAccumulator,
   class TileShape_MNK,
   class ClusterShape_MNK,
   class StageCountType,
-  class KernelScheduleType,
-  class ElementD
+  class KernelScheduleType
 >
 struct CollectiveBuilder<
     arch::Sm90,
@@ -206,19 +208,21 @@ struct CollectiveBuilder<
     ElementB,
     GmemLayoutBTag,
     AlignmentB, 
+    Element_gemm1_weight,
+    GmemLayout_gemm1_weight_Tag,
+    Alignment_gemm1_weight,
     ElementAccumulator,
     TileShape_MNK,
     ClusterShape_MNK,
     StageCountType,
     KernelScheduleType,
-    ElementD,
     cute::enable_if_t<
       (cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecialized> ||
        cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedPingpong> ||
        cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperative> ||
        cute::is_same_v<KernelScheduleType, KernelPtrArrayTmaWarpSpecializedCooperative>) &&
        not detail::is_use_rmem_A<ElementA, GmemLayoutATag, ElementB, GmemLayoutBTag>()>
-> { // 15
+> {
   static_assert(is_static<TileShape_MNK>::value);
   static_assert(is_static<ClusterShape_MNK>::value);
 #ifndef CUTLASS_SM90_COLLECTIVE_BUILDER_SUPPORTED
@@ -269,23 +273,20 @@ struct CollectiveBuilder<
   using CollectiveOp = CollectiveMma<
       DispatchPolicy,
       TileShape_MNK,
-
       ElementA,
       TagToStrideA_t<GmemLayoutATag>,
       ElementB,
       TagToStrideB_t<GmemLayoutBTag>,
-
-
+      Element_gemm1_weight,
+      TagToStrideB_t<GmemLayout_gemm1_weight_Tag>,
       TiledMma,
       GmemTiledCopyA,
       SmemLayoutAtomA,
       SmemCopyAtomA,
-
       cute::identity,
       GmemTiledCopyB,
       SmemLayoutAtomB,
       SmemCopyAtomB,
-
       cute::identity
     >;
   // TagToStrideB_t这里为什么区分A和B我也想不明白。但是毕竟weight和B一样，都是权重，所以暂时先按B来吧。

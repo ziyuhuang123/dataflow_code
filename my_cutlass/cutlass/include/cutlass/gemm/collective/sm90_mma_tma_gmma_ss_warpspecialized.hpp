@@ -61,6 +61,8 @@ template <
   class StrideA_,
   class ElementB_,
   class StrideB_,
+  class Element_gemm1_weight_,
+  class Stride_gemm1_weight_,
   class TiledMma_,
   class GmemTiledCopyA_,
   class SmemLayoutAtomA_,
@@ -77,7 +79,8 @@ struct CollectiveMma<
     StrideA_,
     ElementB_,
     StrideB_,
-
+    Element_gemm1_weight_,
+    Stride_gemm1_weight_,
     TiledMma_,
     GmemTiledCopyA_,
     SmemLayoutAtomA_,
@@ -88,10 +91,6 @@ struct CollectiveMma<
     SmemCopyAtomB_,
     TransformB_>
 {
-  // class Element_gemm1_weight_,
-  // class Stride_gemm1_weight_,
-    // Element_gemm1_weight_,
-    // Stride_gemm1_weight_,
   //
   // Type Aliases
   //
@@ -101,8 +100,8 @@ struct CollectiveMma<
   using StrideA = StrideA_;
   using ElementB = ElementB_;
   using StrideB = StrideB_;
-  // using Element_gemm1_weight = Element_gemm1_weight_;
-  // using Stride_gemm1_weight = Stride_gemm1_weight_;
+  using Element_gemm1_weight = Element_gemm1_weight_;
+  using Stride_gemm1_weight = Stride_gemm1_weight_;
   using TiledMma = TiledMma_;
   using ElementAccumulator = typename TiledMma::ValTypeC;
   using GmemTiledCopyA = GmemTiledCopyA_;
@@ -191,11 +190,11 @@ struct CollectiveMma<
     StrideA dA;
     ElementB const* ptr_B;
     StrideB dB;
+    Element_gemm1_weight const* ptr_gemm1_weight;
+    Stride_gemm1_weight d_gemm1_weight;
     uint32_t mma_promotion_interval = 4;
-  };
+  }; // 成功加入了gemm1_weight。这里是模板的定义。在host函数还要传入指针。
 
-    // Element_gemm1_weight const* ptr_gemm1_weight;
-    // Stride_gemm1_weight d_gemm1_weight;
 
   // Device side kernel params
   struct Params {

@@ -60,7 +60,7 @@ using StageCountAuto = StageCountAutoCarveout<0>;
 // Can be overridden with kernel schedule tags in cutlass/gemm/dispatch_policy.hpp
 struct KernelScheduleAuto final {};
 
-/////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////// Element_gemm1_weight, Layout_gemm1_weight, Alignment_gemm1_weight
 
 template <
   class ArchTag,
@@ -71,6 +71,9 @@ template <
   class ElementB,
   class GmemLayoutB,
   int AlignmentB,
+  class Element_gemm1_weight,
+  class GmemLayout_gemm1_weight,
+  int Alignment_gemm1_weight,
   class ElementAccumulator,
   class TileShape_MNK,
   class ClusterShape_MNK,

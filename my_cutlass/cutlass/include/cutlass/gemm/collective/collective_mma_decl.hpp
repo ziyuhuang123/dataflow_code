@@ -44,6 +44,8 @@ template <
   class StrideA,
   class ElementB,
   class StrideB,
+  class Element_gemm1_weight,
+  class Stride_gemm1_weight,
   class TiledMma,
   class GmemTiledCopyA,
   class SmemLayoutAtomA,
