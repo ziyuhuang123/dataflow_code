@@ -297,3 +297,5 @@ cusync 是不是可以总结为没做kernel fusion，是通过信号量/wait ker
 2. 修改block计算顺序为横向
 3. 创建gemm1_weight
 4. 修改storage_C
+
+上述任务完成了。到晚上九点为止。并且实现了TMA版本下，取消掉while循环。

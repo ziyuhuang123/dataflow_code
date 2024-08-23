@@ -141,19 +141,20 @@ public:
 #if defined(__CUDA_ARCH__)
     if (params_.raster_order_ == RasterOrder::AlongN) {
       // current_work_linear_idx_ = uint64_t(blockIdx.x) + uint64_t(blockIdx.y) * uint64_t(gridDim.x);  // 原先的代码
-      current_work_linear_idx_ = uint64_t(blockIdx.y); //1. 消除persistent 2. 修改block计算顺序为横向
-
+      // current_work_linear_idx_ = uint64_t(blockIdx.y); //1. 消除persistent 2. 修改block计算顺序为横向
+      current_work_linear_idx_ = uint64_t(cute::block_id_in_cluster().y) + uint64_t(cute::cluster_id_in_grid().y) * uint64_t(scheduler_params.problem_block_number.y);
 
 
 
       // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
       //   printf("enter Raster N\n");
-
       //   printf("block_id_in_cluster.y = %llu\n", uint64_t(cute::block_id_in_cluster().y));
       //   printf("cluster_id_in_grid.y = %llu\n", uint64_t(cute::cluster_id_in_grid().y));
       //   printf("problem_block_number.y = %llu\n", uint64_t(scheduler_params.problem_block_number.y));
       //   printf("current_work_linear_idx_ = %llu\n", current_work_linear_idx_);
       // }
+
+      
     }
     else {
       // if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==0&&threadIdx.y==0){
@@ -194,9 +195,13 @@ public:
     //   return WorkTileInfo::invalid_work_tile();
     // }  // 原先的代码
 
-    if(linear_idx>uint64_t(blockIdx.y)){
+    if(linear_idx>uint64_t(cute::block_id_in_cluster().y) + uint64_t(cute::cluster_id_in_grid().y+1) * uint64_t(scheduler_params.problem_block_number.y)){
       return WorkTileInfo::invalid_work_tile();
-    }  //1. 消除persistent
+    }  
+
+    // if(linear_idx>uint64_t(blockIdx.y)){
+    //   return WorkTileInfo::invalid_work_tile();
+    // }  //1. 消除persistent
 
     // Map worker's linear index into the CTA tiled problem shape to the corresponding MNL indices
     uint64_t work_idx_l, remainder;
@@ -213,7 +218,12 @@ public:
   CUTLASS_DEVICE
   void
   advance_to_next_work(uint32_t advance_count = 1) {
-    current_work_linear_idx_ += total_grid_size_ * uint64_t(advance_count); // 原先的代码
+    // current_work_linear_idx_ += total_grid_size_ * uint64_t(advance_count); // 原先的代码
+    current_work_linear_idx_ += total_cluster_size_ * uint64_t(advance_count);// 向右移动 
+    // if(current_work_linear_idx_ >= (cute::cluster_id_in_grid().y+cluster_jump_count*7+1)*scheduler_params.problem_block_number.y){
+    //   cluster_jump_count += 1;
+    //   current_work_linear_idx_ = uint64_t(cute::block_id_in_cluster().y) + uint64_t(cute::cluster_id_in_grid().y+cluster_jump_count*7) * uint64_t(scheduler_params.problem_block_number.y);// 向上移动
+    // }
   }
 
   // Computes the linear index within a batch given M and N tile offsets within the batch.

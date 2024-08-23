@@ -265,9 +265,9 @@ struct PersistentTileSchedulerSm90Params {
         launch_grid.y = possibly_truncate(
             cta_per_device       / cluster_shape.m(),
             problem_blocks_total / cluster_shape.m());
-        // launch_grid.y = (problem_blocks_m/cluster_shape.m()) * cluster_size;  //1. 消除persistent 打开这个选项就不是persistent了
-        launch_grid.y = (problem_blocks_m/cluster_shape.m()) * problem_blocks_n;  //1. 消除persistent 打开这个选项就不是persistent了
-        // printf("launch_grid=(%d, %d), problem_blocks_m=%d, problem_blocks_n=%d, cluster_shape.m()=%d, problem_blocks_total=%d\n", launch_grid.x, launch_grid.y, problem_blocks_m,problem_blocks_n, cluster_shape.m(), problem_blocks_total);
+        launch_grid.y = (problem_blocks_m/cluster_shape.m()) * cluster_size;  //1. 消除persistent
+        // launch_grid.y = (problem_blocks_m/cluster_shape.m()) * problem_blocks_n;  //1. 消除persistent 打开这个选项就不是persistent了
+        printf("launch_grid=(%d, %d), problem_blocks_m=%d, problem_blocks_n=%d, cluster_shape.m()=%d, problem_blocks_total=%d, cluster_size=%d\n", launch_grid.x, launch_grid.y, problem_blocks_m,problem_blocks_n, cluster_shape.m(), problem_blocks_total, cluster_size);
       }
       else {
         launch_grid.x = possibly_truncate(
