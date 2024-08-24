@@ -205,9 +205,13 @@ struct CollectiveBuilder<
   // For fp32 types, map to tf32 MMA value type
   using ElementAMma = cute::conditional_t<cute::is_same_v<ElementA, float>, tfloat32_t, ElementA>;
   using ElementBMma = cute::conditional_t<cute::is_same_v<ElementB, float>, tfloat32_t, ElementB>;
+  using Element_gemm1_weight_Mma = cute::conditional_t<cute::is_same_v<Element_gemm1_weight, float>, tfloat32_t, Element_gemm1_weight>;
+
 
   static constexpr cute::GMMA::Major GmmaMajorA = detail::gmma_ss_tag_to_major_A<ElementAMma, GmemLayoutATag>();
   static constexpr cute::GMMA::Major GmmaMajorB = detail::gmma_ss_tag_to_major_B<ElementBMma, GmemLayoutBTag>();
+  static constexpr cute::GMMA::Major GmmaMajor_gemm1_weight = detail::gmma_ss_tag_to_major_B<Element_gemm1_weight_Mma, GmemLayout_gemm1_weight_Tag>();  // 就照葫芦画瓢了。。。也不清楚对不对啊。。底层是什么意思呢？
+
 
   using AtomLayoutMNK = cute::conditional_t<
       cute::is_same_v<KernelScheduleType, KernelTmaWarpSpecializedCooperative> || IsArrayOfPointersGemm,
@@ -218,11 +222,14 @@ struct CollectiveBuilder<
 
   using GmemTiledCopyA = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<1>(ClusterShape_MNK{})));
   using GmemTiledCopyB = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<0>(ClusterShape_MNK{})));
+  using GmemTiledCopy_gemm1_weight = decltype(detail::sm90_cluster_shape_to_tma_atom(shape<0>(ClusterShape_MNK{}))); // 此处和B矩阵是一样的。都是考虑根据cluster尺寸以便后续multicast
 
   using SmemLayoutAtomA = decltype(detail::ss_smem_selector<
       GmmaMajorA, ElementAMma, decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
   using SmemLayoutAtomB = decltype(detail::ss_smem_selector<
       GmmaMajorB, ElementBMma, decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
+  using SmemLayoutAtom_gemm1_weight = decltype(detail::ss_smem_selector<
+      GmmaMajor_gemm1_weight, Element_gemm1_weight_Mma, decltype(cute::get<1>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
 
   static constexpr int PipelineStages = detail::compute_stage_count_or_override<detail::sm90_smem_capacity_bytes,
       ElementAMma, ElementBMma, TileShape_MNK>(StageCountType{});
@@ -235,6 +242,7 @@ struct CollectiveBuilder<
 
   using SmemCopyAtomA = void; 
   using SmemCopyAtomB = void; 
+  using SmemCopyAtom_gemm1_weight = void; // 这是啥啊。。void。。？
 
   using CollectiveOp = CollectiveMma<
       DispatchPolicy,
@@ -253,7 +261,10 @@ struct CollectiveBuilder<
       GmemTiledCopyB,
       SmemLayoutAtomB,
       SmemCopyAtomB,
-      cute::identity
+      cute::identity,
+      GmemTiledCopy_gemm1_weight,
+      SmemLayoutAtom_gemm1_weight,
+      SmemCopyAtom_gemm1_weight
     >;
 };
 

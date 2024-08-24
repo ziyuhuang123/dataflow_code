@@ -927,12 +927,36 @@ inner_partition(Tensor    && tensor,
   auto tensor_tiled = zipped_divide(static_cast<Tensor&&>(tensor), tiler);
   constexpr int R0 = decltype(rank<0>(tensor_tiled))::value;
 
+  // if(blockIdx.x==5&&blockIdx.y==2&&threadIdx.x==0&&threadIdx.y==0){
+  //   print(tensor_tiled);
+  //   printf("\ncute 000\n");
+  // }
   // The coord slices into the second mode (the "rest" mode), flatten the first
   if constexpr (is_tuple<Coord>::value) {
+
     // Append trailing modes if coord is tuple
     constexpr int R1 = decltype(rank<1>(tensor_tiled))::value;
+
+    // if(blockIdx.x==5&&blockIdx.y==2&&threadIdx.x==0&&threadIdx.y==0){
+    //   // printf("\ncute 111, R0=%d, R1=%d\n", R0, R1);
+    //   auto repeated = repeat<R0>(_); // 就是(_,_)
+    //   auto appended = append<R1>(coord, _); // 比如原先的coord是(5,_)这个是根据blockidx.x .y那些来的。然后这里就是append延展到R1（4）那么长，然后补的内容都补_，就比如成为(5,_,_,_)
+    //   // print(coord);
+    //   // printf("\n");
+    //   print(repeated);
+    //   printf("\n");
+    //   print(appended);
+    //   printf("\n");
+    //   print(tensor_tiled(repeat<R0>(_), append<R1>(coord,_)));
+    //   printf("\n");
+    //   // 对((32,4),(32,128,1,10))执行((_,_),(5,_,_,_))
+    // }
+
     return tensor_tiled(repeat<R0>(_), append<R1>(coord,_));
   } else {
+    // if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==0&&threadIdx.y==0){
+    //   printf("\ncute 222\n");
+    // }
     // Flat indexing if coord is not tuple
     return tensor_tiled(repeat<R0>(_), coord);
   }

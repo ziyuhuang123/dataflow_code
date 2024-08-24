@@ -71,7 +71,11 @@ template <
   class GmemTiledCopyB_,
   class SmemLayoutAtomB_,
   class SmemCopyAtomB_,
-  class TransformB_>
+  class TransformB_,
+  class GmemTiledCopy_gemm1_weight_,
+  class SmemLayoutAtom_gemm1_weight_,
+  class SmemCopyAtom_gemm1_weight_
+  >
 struct CollectiveMma<
     MainloopSm90TmaGmmaWarpSpecialized<Stages, ClusterShape, KernelSchedule>,
     TileShape_,
@@ -89,7 +93,11 @@ struct CollectiveMma<
     GmemTiledCopyB_,
     SmemLayoutAtomB_,
     SmemCopyAtomB_,
-    TransformB_>
+    TransformB_,
+    GmemTiledCopy_gemm1_weight_,
+    SmemLayoutAtom_gemm1_weight_,
+    SmemCopyAtom_gemm1_weight_
+    >
 {
   //
   // Type Aliases
@@ -106,12 +114,15 @@ struct CollectiveMma<
   using ElementAccumulator = typename TiledMma::ValTypeC;
   using GmemTiledCopyA = GmemTiledCopyA_;
   using GmemTiledCopyB = GmemTiledCopyB_;
+  using GmemTiledCopy_gemm1_weight = GmemTiledCopy_gemm1_weight_;
   using SmemLayoutAtomA = SmemLayoutAtomA_;
   using SmemLayoutAtomB = SmemLayoutAtomB_;
+  using SmemLayoutAtom_gemm1_weight = SmemLayoutAtom_gemm1_weight_;
   using SmemCopyAtomA = SmemCopyAtomA_;
   using SmemCopyAtomB = SmemCopyAtomB_;
+  using SmemCopyAtom_gemm1_weight = SmemCopyAtom_gemm1_weight_;  // 这些后续怎么用？目前先改到这里！
   using TransformA = TransformA_;
-  using TransformB = TransformB_;
+  using TransformB = TransformB_; // transform居然也有A和B的？那给D是不是也加一个？
   using ArchTag = typename DispatchPolicy::ArchTag;
 
   using CtaShape_MNK = decltype(shape_div(TileShape{}, ClusterShape{}));
@@ -137,6 +148,12 @@ struct CollectiveMma<
       SmemLayoutAtomB{},
       make_shape(shape<1>(TileShape{}), shape<2>(TileShape{}), Int<DispatchPolicy::Stages>{}),
       cute::conditional_t< ::cutlass::gemm::detail::is_major<0,StrideB>(), Step<_2,_1,_3>, Step<_1,_2,_3>>{}));
+// 从GMMA_TMA_WS_SS的CollectiveBuilder知SmemLayoutAtomB就是void
+  using SmemLayout_gemm1_weight = decltype(tile_to_shape(
+      SmemLayoutAtom_gemm1_weight{},
+      make_shape(shape<1>(TileShape{}), shape<2>(TileShape{}), Int<DispatchPolicy::Stages>{}),
+      cute::conditional_t< ::cutlass::gemm::detail::is_major<0,Stride_gemm1_weight>(), Step<_2,_1,_3>, Step<_1,_2,_3>>{}));
+// 这里因为GEMM1不需要读那么多A矩阵，其实对于stages是可以改一改的。。不过暂时不那么麻烦了。。。
 
   static_assert(DispatchPolicy::Stages >= 2, "Specialization requires Stages set to value 2 or more.");
   static_assert(cute::is_base_of<cute::GMMA::DescriptorIterator, typename TiledMma::FrgTypeA>::value &&
@@ -153,6 +170,7 @@ struct CollectiveMma<
   static constexpr bool ConvertF32toTF32B = cute::is_same_v<float, ElementB>;
   using InternalElementA = cute::conditional_t<ConvertF32toTF32A, tfloat32_t, uint_bit_t<sizeof_bits_v<ElementA>>>;
   using InternalElementB = cute::conditional_t<ConvertF32toTF32B, tfloat32_t, uint_bit_t<sizeof_bits_v<ElementB>>>;
+  using InternalElement_gemm1_weight = cute::conditional_t<ConvertF32toTF32B, tfloat32_t, uint_bit_t<sizeof_bits_v<Element_gemm1_weight>>>;
 
   struct SharedStorage
   {
@@ -194,8 +212,22 @@ struct CollectiveMma<
         SmemLayoutB{}(_,_,cute::Int<0>{}),
         TileShape{},
         ClusterShape{}));
+
+
+
+    // Assumption: StrideB is congruent with Problem_NK
+    using TMA_gemm1_weight = decltype(make_tma_copy_B_sm90(
+        GmemTiledCopy_gemm1_weight{},
+        make_tensor(static_cast<InternalElement_gemm1_weight const*>(nullptr), repeat_like(Stride_gemm1_weight{}, int32_t(0)), Stride_gemm1_weight{}),
+        SmemLayout_gemm1_weight{}(_,_,cute::Int<0>{}),
+        TileShape{},
+        ClusterShape{}));
+
+
+
     TMA_A tma_load_a;
     TMA_B tma_load_b;
+    TMA_gemm1_weight tma_load_gemm1_weight;
     uint32_t tma_transaction_bytes = TmaTransactionBytes;
     uint32_t tma_transaction_bytes_mk = TmaTransactionBytesMK;
     uint32_t tma_transaction_bytes_nk = TmaTransactionBytesNK;
@@ -234,7 +266,7 @@ struct CollectiveMma<
         ClusterShape{});
     uint32_t transaction_bytes_mk = TmaTransactionBytesMK;
     uint32_t transaction_bytes_nk = TmaTransactionBytesNK;
-    uint32_t transaction_bytes = transaction_bytes_mk + transaction_bytes_nk;
+    uint32_t transaction_bytes = transaction_bytes_mk + transaction_bytes_nk;  // 这个有什么用处？没搞清楚，暂时先不创建gemm_weight了
 
     return {
       tma_load_a,
@@ -298,18 +330,33 @@ struct CollectiveMma<
     // Represent the full tensors -- get these from TMA
     Tensor mA_mkl = mainloop_params.tma_load_a.get_tma_tensor(make_shape(M,K,L));                            // (m,k,l)
     Tensor mB_nkl = mainloop_params.tma_load_b.get_tma_tensor(make_shape(N,K,L));                            // (n,k,l)
+    Tensor m_gemm1_weight_ntl = mainloop_params.tma_load_gemm1_weight.get_tma_tensor(make_shape(N,T,L));                            // (n,t,l)
+
 
     // Make tiled views, defer the slice
     Tensor gA_mkl = local_tile(mA_mkl, TileShape{}, make_coord(_,_,_), Step<_1, X,_1>{});        // (BLK_M,BLK_K,m,k,l)
     Tensor gB_nkl = local_tile(mB_nkl, TileShape{}, make_coord(_,_,_), Step< X,_1,_1>{});        // (BLK_N,BLK_K,n,k,l)
+    Tensor g_gemm1_weight_nkl = local_tile(m_gemm1_weight_ntl, TileShape{}, make_coord(_,_,_), Step< X,_1,_1>{});        // (BLK_N,BLK_K,n,k,l)
 
-    return cute::make_tuple(gA_mkl, gB_nkl);
+    // if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==0&&threadIdx.y==0){
+    //   print(mA_mkl); // ArithTuple(_0,_0,_0) o (2048,2048,1):(_1@1,_1@0,_1@2)
+    //   printf("\nmA_mkl shape\n");
+    //   print(gA_mkl); // ArithTuple(_0,_0,_0) o (_128,_64,16,32,1):(_1@1,_1@0,_128@1,_64@0,_1@2)
+    //   printf("\ngA_mkl shape\n");
+    //   print(m_gemm1_weight_ntl); // ArithTuple(_0,_0,_0) o (2048,4096,1):(_1@1,_1@0,_1@2)
+    //   printf("\nm_gemm1_weight_ntl\n");
+    //   print(g_gemm1_weight_nkl); // ArithTuple(_0,_0,_0) o (_256,_64,8,64,1):(_1@1,_1@0,_256@1,_64@0,_1@2)
+    //   printf("\ng_gemm1_weight_nkl\n");
+    // }
+
+
+    return cute::make_tuple(gA_mkl, gB_nkl, g_gemm1_weight_nkl);
   }
 
   /// Perform a collective-scoped matrix multiply-accumulate
   /// Producer Perspective
   template <
-    class TensorA, class TensorB,
+    class TensorA, class TensorB, class Tensor_gemm1_weight,
     class KTileIterator, class BlockCoord
   >
   CUTLASS_DEVICE void
@@ -317,7 +364,7 @@ struct CollectiveMma<
       Params const& mainloop_params,
       MainloopPipeline pipeline,
       PipelineState smem_pipe_write,
-      cute::tuple<TensorA, TensorB> const& load_inputs,
+      cute::tuple<TensorA, TensorB, Tensor_gemm1_weight> const& load_inputs,
       BlockCoord const& blk_coord,
       KTileIterator k_tile_iter, int k_tile_count,
       int thread_idx,
@@ -396,6 +443,110 @@ struct CollectiveMma<
       }
     }
   }
+
+
+
+
+  /// Perform a collective-scoped matrix multiply-accumulate
+  /// Producer Perspective
+  template <
+    class TensorA, class TensorB, class Tensor_gemm1_weight,
+    class KTileIterator, class BlockCoord
+  >
+  CUTLASS_DEVICE void
+  load_partial(
+      Params const& mainloop_params,
+      MainloopPipeline pipeline,
+      PipelineState smem_pipe_write,
+      cute::tuple<TensorA, TensorB, Tensor_gemm1_weight> const& load_inputs,
+      BlockCoord const& blk_coord,
+      KTileIterator k_tile_iter, int k_tile_count,
+      int thread_idx,
+      uint32_t block_rank_in_cluster,
+      TensorStorage& shared_tensors) {
+    int lane_predicate = cute::elect_one_sync();
+
+    if (lane_predicate) {
+      // Tensor sA = make_tensor(make_smem_ptr(shared_tensors.smem_A.data()), SmemLayoutA{});        // (BLK_M,BLK_K,PIPE)
+      Tensor s_gemm1_weight = make_tensor(make_smem_ptr(shared_tensors.smem_B.data()), SmemLayout_gemm1_weight{});        // (BLK_N,BLK_K,PIPE)
+
+      //
+      // Prepare the TMA loads for A and B
+      //
+
+      constexpr uint32_t cluster_shape_x = get<0>(typename DispatchPolicy::ClusterShape());
+      uint2 cluster_local_block_id = {block_rank_in_cluster % cluster_shape_x, block_rank_in_cluster / cluster_shape_x};
+
+      // Tensor gA_mkl = get<0>(load_inputs);
+      // Tensor gB_nkl = get<1>(load_inputs);
+      Tensor g_gemm1_weight_nkl = get<2>(load_inputs);
+// 马上继续消掉A的读取。现在去load_init修改load_inputs为D
+      // auto block_tma_a = mainloop_params.tma_load_a.get_slice(cluster_local_block_id.y);
+      // auto block_tma_b = mainloop_params.tma_load_b.get_slice(cluster_local_block_id.x);
+      auto block_tma_gemm1_weight = mainloop_params.tma_load_gemm1_weight.get_slice(cluster_local_block_id.x);  // 这里和B一样，就沿用.x啦
+
+      // Partition the inputs based on the current block coordinates.
+      auto [m_coord, n_coord, k_coord, l_coord] = blk_coord;
+      // Tensor gA = gA_mkl(_,_,m_coord,_,l_coord);                                                     // (BLK_M,BLK_K,k)
+      // Tensor gB = gB_nkl(_,_,n_coord,_,l_coord);                                                     // (BLK_N,BLK_K,k)
+
+      Tensor g_gemm1_weight = g_gemm1_weight_nkl(_,_,n_coord,_,l_coord);                                                     // (BLK_N,BLK_K,k)
+
+      // Applies the mapping from block_tma_a
+      // Tensor tAgA = block_tma_a.partition_S(gA);                                                 // (TMA,TMA_M,TMA_K,k)
+      // Tensor tAsA = block_tma_a.partition_D(sA);                                              // (TMA,TMA_M,TMA_K,PIPE)
+
+      // Tensor tBgB = block_tma_b.partition_S(gB);                                                 // (TMA,TMA_N,TMA_K,k)
+      // Tensor tBsB = block_tma_b.partition_D(s_gemm1_weight);                                              // (TMA,TMA_N,TMA_K,PIPE)
+
+      Tensor t_gemm1_weight_g_gemm1_weight = block_tma_gemm1_weight.partition_S(g_gemm1_weight);                                                 // (TMA,TMA_N,TMA_K,k) // 这俩有时间打印出来看看尺寸！
+      Tensor t_gemm1_weight_s_gemm1_weight = block_tma_gemm1_weight.partition_D(s_gemm1_weight);                                              // (TMA,TMA_N,TMA_K,PIPE) // 这些不需要一直读到底啊。。。而且每个block需要的都不一样。。。怎么限制K呢？
+
+
+      uint16_t mcast_mask_a = 0;
+      uint16_t mcast_mask_b = 0;  // 这个是什么？？？
+
+      // // Issue TmaLoads
+      // // Maps the tile -> block, value
+      // if constexpr (cute::is_same_v<GmemTiledCopyA, SM90_TMA_LOAD_MULTICAST>) {
+      //   auto block_layout = Layout<typename DispatchPolicy::ClusterShape>{}; // (m,n) -> block_id
+      //   for (int n = 0; n < size<1>(block_layout); ++n) {
+      //     mcast_mask_a |= (uint16_t(1) << block_layout(cluster_local_block_id.x,n,Int<0>{}));
+      //   }
+      // }
+
+      // if constexpr (cute::is_same_v<GmemTiledCopyB, SM90_TMA_LOAD_MULTICAST>) {
+      //   auto block_layout = Layout<typename DispatchPolicy::ClusterShape>{}; // (m,n) -> block_id
+      //   for (int m = 0; m < size<0>(block_layout); ++m) {
+      //     mcast_mask_b |= (uint16_t(1) << block_layout(m,cluster_local_block_id.y,Int<0>{}));
+      //   }
+      // }
+// 如果按照1*16的排布，那A矩阵已经在共享内存里了，而B矩阵各读各的，也不需要multicast。如果以后有什么2*8，那可以再改。现在暂时忽略这里的mcast.
+      // Mainloop
+      CUTLASS_PRAGMA_NO_UNROLL
+      for ( ; k_tile_count > 0; --k_tile_count) {
+        // LOCK smem_pipe_write for _writing_
+        pipeline.producer_acquire(smem_pipe_write);
+
+        //
+        // Copy gmem to smem for *k_tile_iter
+        //
+
+        using BarrierType = typename MainloopPipeline::ProducerBarrierType;
+        BarrierType* tma_barrier = pipeline.producer_get_barrier(smem_pipe_write);
+
+        int write_stage = smem_pipe_write.index();
+        copy(mainloop_params.tma_load_a.with(*tma_barrier, mcast_mask_a), tAgA(_,_,_,*k_tile_iter), tAsA(_,_,_,write_stage));
+        copy(mainloop_params.tma_load_b.with(*tma_barrier, mcast_mask_b), tBgB(_,_,_,*k_tile_iter), tBsB(_,_,_,write_stage));
+        ++k_tile_iter;
+
+        // Advance smem_pipe_write
+        ++smem_pipe_write;
+      }
+    }
+  }
+
+
 
   /// Perform a Producer Epilogue to prevent early exit of blocks in a Cluster
   CUTLASS_DEVICE void

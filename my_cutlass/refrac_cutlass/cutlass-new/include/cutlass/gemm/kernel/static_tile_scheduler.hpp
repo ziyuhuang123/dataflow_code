@@ -180,7 +180,7 @@ public:
   WorkTileInfo
   initial_work_tile_info(ClusterShape cluster_shape) {
     return get_current_work();
-  }
+  }  // 这里加一个WorkTileInfo的意思是返回类型是WorkTileInfo
 
   CUTLASS_DEVICE
   WorkTileInfo

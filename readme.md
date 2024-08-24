@@ -299,3 +299,23 @@ cusync 是不是可以总结为没做kernel fusion，是通过信号量/wait ker
 4. 修改storage_C
 
 上述任务完成了。到晚上九点为止。并且实现了TMA版本下，取消掉while循环。
+
+0823
+上午开会中午开会
+主要自己在写代码。完成了将完全单独一个block执行变成了一横行的persistent。以及，部分找到了k_tile的gemm1的迭代位置。
+开会的take away来自罗新浩的分享，有两张图，介绍了llamma3.1的prefill和decode的各自的latency。
+下午5:30继续开始写代码
+
+晚上给GEMM1加上了外层while。写好了k的值。并翻译完了奥林巴斯的PPT
+
+0824
+1. 理解了local_tile的工作原理，记录在hzy_技术文档
+2. 大体完成了load_partial。还差最后的multi-stage的细节。
+3. 改好了load_init。加入了gemm1_weight的初始化。
+
+之后的任务：
+1. 对GEMM1的load_partial是读取D矩阵以及读取共享内存的GEMM0结果。（搞定了）
+2. 这里对GEMM0怎么读取进来？什么格式？张量怎么排布？顺便研究一下是怎么使用barrier的
+3. 执行store。修改读取，从GEMM0-D共享内存读取A矩阵。目前就使用default-epilogue直接存出到global，而不经过共享内存。
+4. 在consumer里面增加TMA-reduce。
+5. 存出到global。创建GEMM1-最终结果的存储位置。

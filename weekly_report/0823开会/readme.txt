@@ -1,0 +1,3 @@
+这里面ncu那张图，能显示出具体在哪个文件的多少行，哪个指令如何如何，很可能是因为这是用python测出来的。
+kernel优化报告里面展示了prefill和decode各自的时间latency。比如在32K输入的情况下，一个prefill相当于25个token的decode。（但是一般会要求更多token，所以说decode时间占比更大！）
+以及还是attention在整体时间占比里面最大！还是得优化attention。

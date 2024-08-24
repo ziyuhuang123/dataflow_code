@@ -54,7 +54,10 @@ template <
   class GmemTiledCopyB,
   class SmemLayoutAtomB,
   class SmemCopyAtomB,
-  class TransformB
+  class TransformB,
+  class GmemTiledCopy_gemm1_weight_,
+  class SmemLayoutAtom_gemm1_weight_,
+  class SmemCopyAtom_gemm1_weight
 >
 struct CollectiveMma {
   static_assert(cutlass::detail::dependent_false<ElementA>, "Could not find a mainloop specialization.");
