@@ -57,6 +57,7 @@ struct SM90_U32x1_STSM_N
   copy(uint32_t const& src,
        uint128_t     & smem_dst)
   {
+    printf("sm90 60\n");
 #if defined(CUTE_ARCH_STSM_SM90_ENABLED)
     uint32_t smem_int_ptr = cast_smem_ptr_to_uint(&smem_dst);
     asm volatile ("stmatrix.sync.aligned.x1.m8n8.shared.b16 [%0], {%1};\n"
@@ -77,6 +78,7 @@ struct SM90_U32x2_STSM_N
   copy(uint32_t const& src0, uint32_t const& src1,
        uint128_t& smem_dst)
   {
+    printf("sm90 81\n");
 #if defined(CUTE_ARCH_STSM_SM90_ENABLED)
     uint32_t smem_int_ptr = cast_smem_ptr_to_uint(&smem_dst);
     asm volatile ("stmatrix.sync.aligned.x2.m8n8.shared.b16 [%0], {%1, %2};\n"
@@ -97,6 +99,7 @@ struct SM90_U32x4_STSM_N
   copy(uint32_t const& src0, uint32_t const& src1, uint32_t const& src2, uint32_t const& src3,
        uint128_t& smem_dst)
   {
+    printf("sm90 102\n");
 #if defined(CUTE_ARCH_STSM_SM90_ENABLED)
     uint32_t smem_int_ptr = cast_smem_ptr_to_uint(&smem_dst);
     asm volatile ("stmatrix.sync.aligned.x4.m8n8.shared.b16 [%0], {%1, %2, %3, %4};\n"
@@ -117,6 +120,7 @@ struct SM90_U16x2_STSM_T
   copy(uint32_t const& src,
        uint128_t& smem_dst)
   {
+    printf("sm90 123\n");
 #if defined(CUTE_ARCH_STSM_SM90_ENABLED)
     uint32_t smem_int_ptr = cast_smem_ptr_to_uint(&smem_dst);
     asm volatile ("stmatrix.sync.aligned.x1.trans.m8n8.shared.b16 [%0], {%1};\n"
@@ -137,6 +141,7 @@ struct SM90_U16x4_STSM_T
   copy(uint32_t const& src0, uint32_t const& src1,
        uint128_t& smem_dst)
   {
+    printf("sm90 144\n");
 #if defined(CUTE_ARCH_STSM_SM90_ENABLED)
     uint32_t smem_int_ptr = cast_smem_ptr_to_uint(&smem_dst);
     asm volatile ("stmatrix.sync.aligned.x2.trans.m8n8.shared.b16 [%0], {%1, %2};\n"
@@ -157,6 +162,7 @@ struct SM90_U16x8_STSM_T
   copy(uint32_t const& src0, uint32_t const& src1, uint32_t const& src2, uint32_t const& src3,
        uint128_t& smem_dst)
   {
+    // printf("sm90 165\n");
 #if defined(CUTE_ARCH_STSM_SM90_ENABLED)
     uint32_t smem_int_ptr = cast_smem_ptr_to_uint(&smem_dst);
     asm volatile ("stmatrix.sync.aligned.x4.trans.m8n8.shared.b16 [%0], {%1, %2, %3, %4};\n"

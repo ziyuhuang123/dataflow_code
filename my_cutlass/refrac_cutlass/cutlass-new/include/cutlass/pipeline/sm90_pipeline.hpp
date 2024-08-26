@@ -183,6 +183,16 @@ struct PipelineState {
   static PipelineState make_pipeline_state(PipelineState start_state, uint32_t num_iterations) {
     return start_state.advance(num_iterations);
   }
+
+
+  // 目的是使得GEMM1使用barrier前能重新初始化。
+  // New reset function to set index_, phase_, and count_ to 0
+  CUTLASS_DEVICE
+  void reset_initial_start_state() {
+    index_ = 0;
+    phase_ = 1;
+    count_ = 0;
+  } // 就是模仿下面的make_producer_start_state。因为gemm1刚开始也是可以直接读第一次的
 };
 
 template<class Pipeline>
@@ -254,6 +264,10 @@ public :
       // Barrier EMPTY init
       for (int i = 0; i < Stages; ++i) {
         empty_barrier_ptr_[i].init(multicast_consumer_arrival_count);
+      }
+
+      if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
+        printf("enter pipeline 270, multicast_consumer_arrival_count=%d\n", multicast_consumer_arrival_count);
       }
     }
     cutlass::arch::fence_barrier_init();
@@ -399,10 +413,22 @@ private :
 
   CUTLASS_DEVICE
   void producer_acquire(uint32_t stage, uint32_t phase, ProducerToken barrier_token) {
+    // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
+    //   printf("enter pipeline 413\n");
+    // }
     if (barrier_token != BarrierStatus::WaitDone) {
+      // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
+      //   printf("enter pipeline 417, stage(就是index)=%d, phase=%d\n", stage, phase);
+      // } // 打印结果证明就是卡在了下面这一句419上面
+      // if (blockIdx.x == 0 && blockIdx.y == 20 && threadIdx.x == 0 && threadIdx.y == 0) {
+      //     printf("Before waiting, checking barrier value:\n");
+      //     empty_barrier_ptr_[stage].print_barrier_value();
+      // }
       empty_barrier_ptr_[stage].wait(phase);
     }
-
+    // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
+    //   printf("enter pipeline 422\n");
+    // }
     if (params_.is_leader) {
       full_barrier_ptr_[stage].arrive_and_expect_tx(params_.transaction_bytes);
     }
@@ -415,6 +441,12 @@ private :
     if (params_.is_leader && (threadIdx.x % 32 != 0)) {
       asm volatile ("brkpt;\n" ::);
     }
+
+// "brkpt;\n" 是一种断点指令。它的作用是在运行到此处时，触发一个调试断点。如果在调试模式下运行，程序会在此处暂停，允许开发人员检查当前的程序状态。
+
+// 这段代码的作用是在一个 CUDA 内核中检查当前线程是否应该是 "leader" 线程。如果当前线程被标记为 "leader" (params_.is_leader 为真)，但它不是 warp 的第一个线程（即 threadIdx.x 不是 32 的倍数），那么这显然是一个异常情况。这时程序将执行 brkpt 指令，触发调试断点，允许开发人员在调试时立即发现这个异常情况并进行排查。
+
+
     #endif
   }
 

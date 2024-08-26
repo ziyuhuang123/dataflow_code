@@ -53,6 +53,7 @@ struct UniversalCopy
   copy(S_ const& src,
        D_      & dst)
   {
+    printf("copy 56\n");
     dst = static_cast<D>(static_cast<S>(src));
   }
 
@@ -62,6 +63,7 @@ struct UniversalCopy
   copy(S_ const& src,
        D_     && dst)
   {
+    printf("copy 66\n");
     UniversalCopy<S,D>::copy(src, dst);
   }
 };

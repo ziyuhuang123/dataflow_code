@@ -97,6 +97,7 @@ public:
   using ElementC = typename GemmKernel::ElementC;
   using ElementD = typename GemmKernel::ElementD;
   using Element_gemm1_weight = typename GemmKernel::Element_gemm1_weight;
+  using Element_gemm1_output = typename GemmKernel::Element_gemm1_output;
   using ElementAccumulator = typename GemmKernel::ElementAccumulator;
   using DispatchPolicy = typename GemmKernel::DispatchPolicy;
   using CollectiveMainloop = typename GemmKernel::CollectiveMainloop;
@@ -107,6 +108,7 @@ public:
   using LayoutB = gemm::detail::StrideToLayoutTagB_t<typename GemmKernel::StrideB>;
   using LayoutC = gemm::detail::StrideToLayoutTagC_t<typename GemmKernel::StrideC>;
   using LayoutD = gemm::detail::StrideToLayoutTagC_t<typename GemmKernel::StrideD>;
+  using Layout_gemm1_output = gemm::detail::StrideToLayoutTagC_t<typename GemmKernel::Stride_gemm1_output>;
 
   static bool const kEnableCudaHostAdapter = CUTLASS_ENABLE_CUDA_HOST_ADAPTER;
 

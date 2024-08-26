@@ -48,6 +48,7 @@ struct SM90_TMA_LOAD_1D
        void      * smem_ptr,
        int32_t const& crd0)
   {
+    printf("51\n");
 #if defined(CUTE_ARCH_TMA_SM90_ENABLED)
     uint64_t gmem_int_desc = reinterpret_cast<uint64_t>(desc_ptr);
     uint32_t smem_int_mbar = cast_smem_ptr_to_uint(mbar_ptr);
@@ -70,6 +71,7 @@ struct SM90_TMA_LOAD_1D
     copy(void const* desc_ptr,
          int32_t const& crd0)
     {
+      printf("74\n");
   #if defined(CUTE_ARCH_TMA_SM90_ENABLED)
       uint64_t gmem_int_desc = reinterpret_cast<uint64_t>(desc_ptr);
       asm volatile (
@@ -93,6 +95,7 @@ struct SM90_TMA_LOAD_2D
        void      * smem_ptr,
        int32_t const& crd0, int32_t const& crd1)
   {
+    printf("98\n");
 #if defined(CUTE_ARCH_TMA_SM90_ENABLED)
     uint64_t gmem_int_desc = reinterpret_cast<uint64_t>(desc_ptr);
     uint32_t smem_int_mbar = cast_smem_ptr_to_uint(mbar_ptr);
@@ -115,6 +118,7 @@ struct SM90_TMA_LOAD_2D
     copy(void const* desc_ptr,
          int32_t const& crd0, int32_t const& crd1)
     {
+      printf("121\n");
   #if defined(CUTE_ARCH_TMA_SM90_ENABLED)
       uint64_t gmem_int_desc = reinterpret_cast<uint64_t>(desc_ptr);
       asm volatile (
@@ -351,6 +355,7 @@ struct SM90_TMA_LOAD_IM2COL_3D
        int32_t const& coord_c, int32_t const& coord_w, int32_t const& coord_n,
        uint16_t const& offset_w)
   {
+    printf("358\n");
 #if defined(CUTE_ARCH_TMA_SM90_ENABLED)
     uint64_t gmem_int_desc = reinterpret_cast<uint64_t>(desc_ptr);
     uint32_t smem_int_mbar = cast_smem_ptr_to_uint(mbar_ptr);
@@ -376,6 +381,7 @@ struct SM90_TMA_LOAD_IM2COL_3D
          int32_t const& coord_c, int32_t const& coord_w, int32_t const& coord_n,
          uint16_t const& offset_w)
     {
+      printf("358\n");
   #if defined(CUTE_ARCH_TMA_SM90_ENABLED)
       uint64_t gmem_int_desc = reinterpret_cast<uint64_t>(desc_ptr);
       asm volatile (

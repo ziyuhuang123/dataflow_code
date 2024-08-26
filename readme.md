@@ -319,3 +319,51 @@ cusync 是不是可以总结为没做kernel fusion，是通过信号量/wait ker
 3. 执行store。修改读取，从GEMM0-D共享内存读取A矩阵。目前就使用default-epilogue直接存出到global，而不经过共享内存。
 4. 在consumer里面增加TMA-reduce。
 5. 存出到global。创建GEMM1-最终结果的存储位置。
+
+0825
+1. 研究为什么copy会导致错误而退出--->用tma_b暂时不会错误了。
+2. 研究为什么没有copy会循环无法出来。---->我感觉就是缺少consumer。k_tile_count（比如是32）应该无所谓的。反正每次达到stages（比如是3）数就卡住等consumer。然后再继续执行k_tile_count。
+
+16+32--48kb
+64kb
+227-64=163
+163/48=3 所以stages=3
+
+在初始化pipelineState的时候就会把stages传给Mainloop类，然后从Mainloop里面调用出pipelineState。
+
+1. 去看大致producer和consumer是怎么配合的。---->看到了pipelineState。知道了里面的count，stages，phase三个变量和advance函数。stage呢，就是说有多个barrier同时在运行，phase就是说完成与否。所以是有stages*phase个信号量。count没什么用。
+2. 理解并修改mma。-->先修改为读D权重，然后再修改为读共享内存的GEMM0的结果////读D容易。因为之前就写到了B里面去，就不需要改了。
+3. 看懂consumer里面剩下的其他东西。
+4. 整个拼起来。
+
+今晚卡在对mma的理解上。底层到底为什么卡住了？是barrier.wait这里。具体原因只能明天去研究了。
+
+0826
+1. 研究到底为什么barrier卡住了。
+底层原因我不想关心了。首先，先把GEMM0的代码搬迁过来，直到能够跑通。
+然后根据GEMM0的写法，逐步修改load和mma。
+
+1. 先增加GEMM1的存出，创建空变量。名字叫gemm1_output
+2. 将存出改为gemm1_output
+3. 逐渐修改load和mma成_gemm1的格式。
+
+
+修改mma_gemm1为去读取SMEM的值。
+先去看，load到共享内存的B矩阵是什么layout。然后检查我们存到共享内存的D是什么layout。
+
+额。。。load里面发现，必须要两个copy才能往下走。。。哪怕是copyA和gemm1_weight都可以。为什么呢？
+
+
+A+B 可以
+A+G 可以
+B+G 卡死（但是注意B和G都是写到同一块SMEM位置）
+A      卡死
+B      卡死
+G      卡死
+
+很大可能是，对数量在什么地方有限制。
+
+会不会是A的定义的过程中有什么必须后续执行的限制？不会。我把load_new里面和A相关的都注释掉。也卡死了。
+
+1. 可能是copy自带的限制？那么要深入去找copy定义在哪里。一路上溯。
+2. 可能是是tma_load_a这种地方的限制？那么去上溯tma的定义。

@@ -306,13 +306,14 @@ struct ExampleRunner {
   using LayoutC = cutlass::layout::ColumnMajor;
   using LayoutD = cutlass::layout::ColumnMajor;
   using Layout_gemm1_weight = cutlass::layout::ColumnMajor;
-
+  using Layout_gemm1_output = cutlass::layout::ColumnMajor;
 
   using ElementA = cutlass::half_t;
   using ElementB = cutlass::half_t;
   using ElementC = cutlass::half_t;
   using ElementD = cutlass::half_t;
   using Element_gemm1_weight = cutlass::half_t;
+  using Element_gemm1_output = cutlass::half_t;
 
   using ElementAccumulator = float;
   using ElementCompute = float;
@@ -324,7 +325,7 @@ struct ExampleRunner {
   static constexpr int AlignmentC = 16 / sizeof(ElementC);
   static constexpr int AlignmentD = 16 / sizeof(ElementD);
   static constexpr int Alignment_gemm1_weight = 16 / sizeof(Element_gemm1_weight);
-
+  static constexpr int Alignment_gemm1_output = 16 / sizeof(Element_gemm1_weight);
 
   static_assert(not UseCustomEVT ||
     (cute::is_same_v<EpilogueScheduleType, cutlass::epilogue::TmaWarpSpecialized> ||
@@ -339,7 +340,7 @@ struct ExampleRunner {
 
 
     using TileShape = Shape<_128,_256,_64>; // Threadblock-level tile size
-    using ClusterShape = Shape<_1, _16, _1>;
+    using ClusterShape = Shape<_1, _2, _1>;
 
 
 
@@ -366,6 +367,7 @@ struct ExampleRunner {
       ElementAccumulator, ElementCompute,
       ElementC, LayoutC, AlignmentC,
       ElementD, LayoutD, AlignmentD,
+      Element_gemm1_output, Layout_gemm1_output, Alignment_gemm1_output,
       EpilogueScheduleType,
       cute::conditional_t<UseCustomEVT, CustomEVT, DefaultOperation>
     >::CollectiveOp;
@@ -409,13 +411,14 @@ struct ExampleRunner {
   using StrideC = typename Gemm::GemmKernel::StrideC;
   using StrideD = typename Gemm::GemmKernel::StrideD;
   using Stride_gemm1_weight = typename Gemm::GemmKernel::Stride_gemm1_weight;
-  
+  using Stride_gemm1_output = typename Gemm::GemmKernel::Stride_gemm1_output;
 
   using LayoutTagA = cutlass::gemm::detail::StrideToLayoutTagA_t<StrideA>;
   using LayoutTagB = cutlass::gemm::detail::StrideToLayoutTagB_t<StrideB>;
   using LayoutTagC = cutlass::gemm::detail::StrideToLayoutTagC_t<StrideC>;
   using LayoutTagD = cutlass::gemm::detail::StrideToLayoutTagC_t<StrideD>;
   using LayoutTag_gemm1_weight = cutlass::gemm::detail::StrideToLayoutTagB_t<Stride_gemm1_weight>; // 这个跟B学！毕竟是权重矩阵
+  using LayoutTag_gemm1_output = cutlass::gemm::detail::StrideToLayoutTagC_t<Stride_gemm1_output>; // 这个跟C学！都是存储矩阵
 
   //
   // Data members
@@ -427,6 +430,7 @@ struct ExampleRunner {
   StrideC stride_C;
   StrideD stride_D;
   Stride_gemm1_weight stride_gemm1_weight;
+  Stride_gemm1_output stride_gemm1_output;
   uint64_t seed = 0;
 
   cutlass::DeviceAllocation<typename Gemm::ElementA> block_A;
@@ -434,6 +438,7 @@ struct ExampleRunner {
   cutlass::DeviceAllocation<typename Gemm::ElementC> block_C;
   cutlass::DeviceAllocation<typename Gemm::ElementD> block_D;
   cutlass::DeviceAllocation<typename Gemm::Element_gemm1_weight> block_gemm1_weight;
+  cutlass::DeviceAllocation<typename Gemm::Element_gemm1_output> block_gemm1_output;
   cutlass::DeviceAllocation<typename Gemm::ElementD> block_ref_D;
 
   //
@@ -488,6 +493,7 @@ struct ExampleRunner {
     stride_B = cutlass::make_cute_packed_stride(StrideB{}, cute::make_shape(N, K, L));
     stride_C = cutlass::make_cute_packed_stride(StrideC{}, cute::make_shape(M, N, L));
     stride_D = cutlass::make_cute_packed_stride(StrideD{}, cute::make_shape(M, N, L));
+    stride_gemm1_output = cutlass::make_cute_packed_stride(Stride_gemm1_output{}, cute::make_shape(M, T, L));
     stride_gemm1_weight = cutlass::make_cute_packed_stride(Stride_gemm1_weight{}, cute::make_shape(N, T, L));
 
 
@@ -495,6 +501,7 @@ struct ExampleRunner {
     block_B.reset(K * N * L);
     block_C.reset(M * N * L);
     block_D.reset(M * N * L);
+    block_gemm1_output.reset(M * T * L);
     block_ref_D.reset(M * N * L);
     block_gemm1_weight.reset(N * T * L);
 
@@ -525,7 +532,7 @@ struct ExampleRunner {
       problem_size,
       {block_A.get(), stride_A, block_B.get(), stride_B, block_gemm1_weight.get(), stride_gemm1_weight},
       {{}, // epilogue.thread
-       block_C.get(), stride_C, block_D.get(), stride_D},
+       block_C.get(), stride_C, block_D.get(), stride_D, block_gemm1_output.get(), stride_gemm1_output},
       hw_info
     };
     arguments.scheduler.raster_order = options.raster;

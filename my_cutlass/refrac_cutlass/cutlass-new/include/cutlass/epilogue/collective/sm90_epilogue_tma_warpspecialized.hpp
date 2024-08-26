@@ -68,6 +68,8 @@ template <
   class StrideC_,
   class ElementD_,
   class StrideD_,
+  class Element_gemm1_output_,
+  class Stride_gemm1_output_,
   class FusionCallbacks_,
   class CopyOpG2S_,
   class SmemLayoutAtomC_,
@@ -85,6 +87,8 @@ class CollectiveEpilogue<
     StrideC_,
     ElementD_,
     StrideD_,
+    Element_gemm1_output_,
+    Stride_gemm1_output_,
     FusionCallbacks_,
     CopyOpG2S_,
     SmemLayoutAtomC_,
@@ -106,6 +110,8 @@ public:
   using StrideC = StrideC_;
   using ElementD = ElementD_;
   using StrideD = StrideD_;
+  using Element_gemm1_output = Element_gemm1_output_;
+  using Stride_gemm1_output = Stride_gemm1_output_;
   using CopyOpG2S = CopyOpG2S_;
   using SmemLayoutAtomC = SmemLayoutAtomC_;
   using CopyOpS2R = CopyOpS2R_;
@@ -227,6 +233,8 @@ public:
     StrideC dC;
     ElementD const* ptr_D;
     StrideD dD;
+    Element_gemm1_output const* ptr_gemm1_output;
+    Stride_gemm1_output d_gemm1_output;
   };
 
   // Device side epilogue params
@@ -349,7 +357,7 @@ public:
     bool implementable = true;
     if constexpr (is_destination_supported) {
       constexpr int tma_alignment_bits_D = cutlass::detail::get_output_alignment_bits<ElementD>();
-      constexpr int min_tma_aligned_elements_D = tma_alignment_bits_D / cutlass::sizeof_bits<ElementD>::value;
+      constexpr int min_tma_aligned_elements_D = tma_alignment_bits_D / cutlass::sizeof_bits<ElementD>::value; // 这里也有ElementD，那么需不需要对应修改gemm1_output呢？额。。暂时懒得管了。。。
       implementable = cutlass::detail::check_alignment<min_tma_aligned_elements_D>(shape, StrideD{});
     }
 

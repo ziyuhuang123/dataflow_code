@@ -218,6 +218,13 @@ public:
     ClusterBarrier::wait(&this->barrier_, phase);
   }
 
+
+  CUTLASS_DEVICE
+  void print_barrier_value() const {
+    ClusterBarrier::print_barrier_value(&this->barrier_);
+  }
+
+
   // Barrier arrive on local smem
   CUTLASS_DEVICE
   void arrive() const {
@@ -235,6 +242,7 @@ public:
   //
   CUTLASS_DEVICE
   static void init(ValueType const* smem_ptr, uint32_t arrive_count) {
+    
 #if CUDA_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
     asm volatile(
@@ -247,6 +255,24 @@ public:
     asm volatile ("brkpt;\n" ::);
 #endif
   }
+
+  CUTLASS_DEVICE
+  static void print_barrier_value(ValueType const* smem_ptr) {
+    uint64_t barrier_value;
+    uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
+
+    // 使用 `ld.shared` 从共享内存地址中加载值
+    asm volatile(
+        "{\n\t"
+        "ld.shared.b64 %0, [%1];\n\t"  // 从共享内存加载64位的值到寄存器
+        "}"
+        : "=l"(barrier_value)  // 输出到 barrier_value
+        : "r"(smem_addr)       // 输入smem_addr
+    );
+
+    // 打印加载的值
+    printf("Barrier value: %llu\n", barrier_value);
+  } // 为了调试代码。之后可以删掉
 
   // Static version of wait - in case we don't want to burn a register
   CUTLASS_DEVICE
