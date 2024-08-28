@@ -354,8 +354,8 @@ cusync 是不是可以总结为没做kernel fusion，是通过信号量/wait ker
 额。。。load里面发现，必须要两个copy才能往下走。。。哪怕是copyA和gemm1_weight都可以。为什么呢？
 
 
-A+B 可以
-A+G 可以
+A+B 可以------copyA copyB
+A+G 可以------copyA copyG
 B+G 卡死（但是注意B和G都是写到同一块SMEM位置）
 A      卡死
 B      卡死
@@ -367,3 +367,62 @@ G      卡死
 
 1. 可能是copy自带的限制？那么要深入去找copy定义在哪里。一路上溯。
 2. 可能是是tma_load_a这种地方的限制？那么去上溯tma的定义。
+
+0827
+copy上层的with的位置找到了：temp_can/cutlass-new/include/cute/atom/copy_traits_sm90_tma.hpp
+  // Construct an executable SM90_TMA_LOAD with tma_mbar
+  CUTE_HOST_DEVICE constexpr
+  Copy_Traits<SM90_TMA_LOAD_OP, NumBitsPerTMA>
+  with(
+    uint64_t& tma_mbar,
+    [[maybe_unused]] uint16_t const& multicast_mask = 0,
+    TMA::CacheHintSm90 const& cache_hint = TMA::CacheHintSm90::EVICT_NORMAL) const {
+    // We accept multicast_mask here to keep the API for both atoms consistent
+    return {{}, {&tma_desc_, &tma_mbar, static_cast<uint64_t>(cache_hint)}};
+  }
+
+  // Construct an executable SM90_TMA_LOAD with tma_mbar (temp. overloaded for grouped gemm/ptr array gemm)
+  CUTE_HOST_DEVICE constexpr
+  Copy_Traits<SM90_TMA_LOAD_OP, NumBitsPerTMA>
+  with(
+    TmaDescriptor const* new_tma_desc,
+    uint64_t& tma_mbar,
+    [[maybe_unused]] uint16_t const& multicast_mask = 0,
+    TMA::CacheHintSm90 const& cache_hint = TMA::CacheHintSm90::EVICT_NORMAL) const {
+    // We accept multicast_mask here to keep the API for both atoms consistent
+    return {{}, {new_tma_desc, &tma_mbar, static_cast<uint64_t>(cache_hint)}};
+  }
+不过这边有很多with，搞不清是哪个
+
+通过加入很多printf，寻找到了一些会出现copy的位置（不保证完全，且因为cuda-gdb有问题，暂无法确定调用栈顺序）：
+temp_can/cutlass-new/include/cute/arch/copy_sm90.hpp
+    // printf("sm90 165\n");
+temp_can/cutlass-new/include/cute/arch/copy_sm90_tma.hpp
+    // printf("145\n");
+
+
+我的思路：
+1. 检查init---------搞明白了empty_barrier和full_barrier的关系，如图。
+![alt text](image-1.png)
+2. 检查出现barrier的地方。copy是否动了barrier？------>有待考察！！！！！！
+
+1. 理解full_barrier和empty_barrier具体是怎么工作的？
+2. 尝试修改num_consumer_warpgroups_per_cluster这个参数为其他值。--->确实会卡死！这是影响因素。
+
+
+
+学习了mbarrier的PTX细节。但是没有搞清楚继续执行的条件是否需要所有到达的phase/state值也必须一致？
+1. 语法是mbarrier.arrive{.sem}{.scope}{.shared{::cluster}}.b64       -, [addr]{, count};，不过这里的.sem, .scope都是可选的。所以我们这里就省略了这俩。
+2. arrive和wait是相互配合的，arrive告知wait，当前达到的数量。
+
+看到  // Wait for producer to commit transactions (done by TMA)这句话。看来是TMA执行完内存load操作后会自动执行commit，不需要手动写commit代码。
+
+似乎和full_barrier关系很大。但是这个的初始化就简简单单是1啊？
+
+
+0828
+通过printf，确定到，就是卡在了consumer的consumer_wait那里。所以反推就要去研究full_barrier。很可能是copy里有对full_barrier的提交。（但是，最初init full_barrier就是1，为什么会需要copy的两次提交呢？难道这两个能怎么整合为一个提交吗？）
+
+
+full_barrier是使用expect-tx！？这是什么作用（根据PTX，似乎是增加tx-count）？难道是这里从1个阈值增长到2个阈值吗？（如图）
+![alt text](image.png)
