@@ -491,12 +491,12 @@ public:
 
 
 
-    if(blockIdx.x == 0 && blockIdx.y == 0&&threadIdx.x==383&&threadIdx.y==0) {
-        printf("is_source_supported: %d\n", is_source_supported);
-        printf("fusion_callbacks.is_C_load_needed(): %d\n", fusion_callbacks.is_C_load_needed());
-        printf("is_C_load_needed: %d, th=(%d, %d)\n", is_C_load_needed, threadIdx.x, threadIdx.y);
-        printf("is_destination_supported=%d\n", is_destination_supported);
-    }
+    // if(blockIdx.x == 0 && blockIdx.y == 0&&threadIdx.x==383&&threadIdx.y==0) {
+    //     printf("is_source_supported: %d\n", is_source_supported);
+    //     printf("fusion_callbacks.is_C_load_needed(): %d\n", fusion_callbacks.is_C_load_needed());
+    //     printf("is_C_load_needed: %d, th=(%d, %d)\n", is_C_load_needed, threadIdx.x, threadIdx.y);
+    //     printf("is_destination_supported=%d\n", is_destination_supported);
+    // }
 
 
     
@@ -623,6 +623,12 @@ public:
     Tensor tRS_rAcc = thread_r2s.retile_S(accumulators);                                   // ((R2S,R2S_V),MMA_M,MMA_N)
     Tensor tRS_sD   = thread_r2s.partition_D(sD_epi);                                       // (R2S,R2S_M,R2S_N,PIPE_D)
 
+
+
+
+
+
+
     auto mma_tile_m = size<0>(TileShapeMNK{}) / size<1>(tRS_rAcc);
     auto mma_tile_n = size<1>(TileShapeMNK{}) / size<2>(tRS_rAcc);
     auto epi_tile_m = size<0>(EpilogueTile{});
@@ -630,7 +636,7 @@ public:
 
     // Allocate D registers
     Layout tRS_rD_layout = make_layout(take<0,3>(shape(thread_r2s.partition_S(sD_epi))));
-    Tensor tRS_rD = make_tensor<SmemElementD>(tRS_rD_layout);                                          // (R2S,R2S_M,R2S_N)
+    Tensor tRS_rD = make_tensor<SmemElementD>(tRS_rD_layout); // (R2S,R2S_M,R2S_N)
 
     // Vectorized fragment view
     constexpr int FragmentSize = DispatchPolicy::FragmentSize;
@@ -864,6 +870,22 @@ public:
 
     // Post-loop fusion callback entry point
     cst_callbacks.end();
+
+
+
+
+
+    if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==383&&threadIdx.y==0){
+      printf("\n");
+      print(tRS_sD);
+      printf("   tRS_sD\n");
+      print(bSG_sD);
+      printf("   bSG_sD\n");
+      print(bSG_gD);
+      printf("   bSG_gD\n");
+    }
+
+
 
     return cute::make_tuple(load_pipe_consumer_state, store_pipe_producer_state);
   }

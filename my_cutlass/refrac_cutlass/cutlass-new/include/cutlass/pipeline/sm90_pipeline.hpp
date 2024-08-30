@@ -237,6 +237,7 @@ public :
 
   struct Params {
     uint32_t transaction_bytes = 0;
+    uint32_t transaction_gemm1_bytes = 0;
     ThreadCategory role = ThreadCategory::NonParticipant;
     uint32_t is_leader = 0;
     uint32_t num_consumers = 0;
@@ -264,11 +265,17 @@ public :
       // Barrier EMPTY init
       for (int i = 0; i < Stages; ++i) {
         empty_barrier_ptr_[i].init(multicast_consumer_arrival_count);
-      }
+      } // 就是2*cluster_size。2是说一个cluster有两个consumer warp group。
 
-      if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
-        printf("enter pipeline 270, multicast_consumer_arrival_count=%d\n", multicast_consumer_arrival_count);
-      }
+      if(blockIdx.x == 0 && blockIdx.y == 20 && threadIdx.x == 0 && threadIdx.y == 0){
+          printf("enter pipeline 270, num_consumers=%u, NumThreadsPerWarpGroup=%u, num_consumer_warpgroups_per_cluster=%u, multicast_consumer_arrival_count=%u, cluster_size_x=%u, cluster_size_y=%u\n", 
+              params_.num_consumers, 
+              NumThreadsPerWarpGroup, 
+              num_consumer_warpgroups_per_cluster, 
+              multicast_consumer_arrival_count, 
+              static_cast<uint32_t>(cute::size<0>(cluster_shape)), 
+              static_cast<uint32_t>(cute::size<1>(cluster_shape)));
+      }  // num_consumers=256, NumThreadsPerWarpGroup=128, num_consumer_warpgroups_per_cluster=2, multicast_consumer_arrival_count=4, cluster_size_x=1, cluster_size_y=2
     }
     cutlass::arch::fence_barrier_init();
 
@@ -348,6 +355,11 @@ public :
   }
 
   CUTLASS_DEVICE
+  void producer_acquire_gemm1(PipelineState state, ProducerToken barrier_token = {BarrierStatus::WaitAgain}) {
+    producer_acquire_gemm1(state.index(), state.phase(), barrier_token);
+  }
+
+  CUTLASS_DEVICE
   void producer_commit(PipelineState state, uint32_t bytes) {
     producer_commit(state.index(), bytes);
   }
@@ -356,6 +368,9 @@ public :
   // This should be called once before kernel exits.
   CUTLASS_DEVICE
   void producer_tail(PipelineState state) {
+    // if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
+    //   printf("enter tail-365\n");
+    // }
     for (int count = 0; count < Stages; ++count) {
       empty_barrier_ptr_[state.index()].wait(state.phase());
       ++state;
@@ -413,24 +428,34 @@ private :
 
   CUTLASS_DEVICE
   void producer_acquire(uint32_t stage, uint32_t phase, ProducerToken barrier_token) {
-    // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
-    //   printf("enter pipeline 413\n");
-    // }
     if (barrier_token != BarrierStatus::WaitDone) {
-      // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
-      //   printf("enter pipeline 417, stage(就是index)=%d, phase=%d\n", stage, phase);
-      // } // 打印结果证明就是卡在了下面这一句419上面
-      // if (blockIdx.x == 0 && blockIdx.y == 20 && threadIdx.x == 0 && threadIdx.y == 0) {
-      //     printf("Before waiting, checking barrier value:\n");
-      //     empty_barrier_ptr_[stage].print_barrier_value();
-      // }
       empty_barrier_ptr_[stage].wait(phase);
     }
-    // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
-    //   printf("enter pipeline 422\n");
-    // }
     if (params_.is_leader) {
       full_barrier_ptr_[stage].arrive_and_expect_tx(params_.transaction_bytes);
+    }
+    #ifndef NDEBUG
+    if (params_.role == ThreadCategory::Consumer || params_.role == ThreadCategory::NonParticipant) {
+      asm volatile ("brkpt;\n" ::);
+    }
+    // Most likely you have elected more than one leader
+    if (params_.is_leader && (threadIdx.x % 32 != 0)) {
+      asm volatile ("brkpt;\n" ::);
+    }
+// "brkpt;\n" 是一种断点指令。它的作用是在运行到此处时，触发一个调试断点。如果在调试模式下运行，程序会在此处暂停，允许开发人员检查当前的程序状态。
+
+// 这段代码的作用是在一个 CUDA 内核中检查当前线程是否应该是 "leader" 线程。如果当前线程被标记为 "leader" (params_.is_leader 为真)，但它不是 warp 的第一个线程（即 threadIdx.x 不是 32 的倍数），那么这显然是一个异常情况。这时程序将执行 brkpt 指令，触发调试断点，允许开发人员在调试时立即发现这个异常情况并进行排查。
+    #endif
+  }
+
+  CUTLASS_DEVICE
+  void producer_acquire_gemm1(uint32_t stage, uint32_t phase, ProducerToken barrier_token) {
+    if (barrier_token != BarrierStatus::WaitDone) {
+      empty_barrier_ptr_[stage].wait(phase);
+    }
+    if (params_.is_leader) {
+      // full_barrier_ptr_[stage].arrive_and_expect_tx(params_.transaction_bytes);
+      full_barrier_ptr_[stage].arrive_and_expect_tx(32768); // 手动写成256*64*2.完全修改到arguments的结构体里面太麻烦了。。
     }
     #ifndef NDEBUG
     if (params_.role == ThreadCategory::Consumer || params_.role == ThreadCategory::NonParticipant) {
@@ -441,12 +466,9 @@ private :
     if (params_.is_leader && (threadIdx.x % 32 != 0)) {
       asm volatile ("brkpt;\n" ::);
     }
-
 // "brkpt;\n" 是一种断点指令。它的作用是在运行到此处时，触发一个调试断点。如果在调试模式下运行，程序会在此处暂停，允许开发人员检查当前的程序状态。
 
 // 这段代码的作用是在一个 CUDA 内核中检查当前线程是否应该是 "leader" 线程。如果当前线程被标记为 "leader" (params_.is_leader 为真)，但它不是 warp 的第一个线程（即 threadIdx.x 不是 32 的倍数），那么这显然是一个异常情况。这时程序将执行 brkpt 指令，触发调试断点，允许开发人员在调试时立即发现这个异常情况并进行排查。
-
-
     #endif
   }
 
@@ -573,6 +595,9 @@ public:
   // Wait for all TMA stores to complete
   CUTLASS_DEVICE
   void producer_tail([[maybe_unused]] PipelineState state) {
+    if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
+      printf("enter tail-587\n");
+    }
     tma_store_wait<0>();
   }
 
@@ -631,6 +656,9 @@ public:
   // Wait for all TMA stores to complete
   CUTLASS_DEVICE
     void producer_tail([[maybe_unused]] PipelineState state) {
+    if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
+      printf("enter tail-648\n");
+    }
     tma_store_wait<0>();
   }
 
@@ -745,6 +773,9 @@ public :
   // This should be called once before kernel exits.
   CUTLASS_DEVICE
   void producer_tail(PipelineState state) {
+    if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
+      printf("enter tail-765\n");
+    }
     for (int count = 0; count < Stages; ++count) {
       producer_acquire(state);
       ++state;
@@ -965,6 +996,9 @@ public :
   // This should be called once before kernel exits.
   CUTLASS_DEVICE
   void producer_tail(PipelineState state) {
+    if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
+      printf("enter tail-988\n");
+    }
     for (int count = 0; count < Stages; ++count) {
       producer_acquire(state);
       ++state;

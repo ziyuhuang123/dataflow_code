@@ -146,7 +146,7 @@ public:
 
 
 
-      // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
+      // if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
       //   printf("enter Raster N\n");
       //   printf("block_id_in_cluster.y = %llu\n", uint64_t(cute::block_id_in_cluster().y));
       //   printf("cluster_id_in_grid.y = %llu\n", uint64_t(cute::cluster_id_in_grid().y));

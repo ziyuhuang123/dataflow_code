@@ -426,3 +426,7 @@ temp_can/cutlass-new/include/cute/arch/copy_sm90_tma.hpp
 
 full_barrier是使用expect-tx！？这是什么作用（根据PTX，似乎是增加tx-count）？难道是这里从1个阈值增长到2个阈值吗？（如图）
 ![alt text](image.png)
+
+0830
+上午中午组会
+下午打算搞明白GEMM0到底是怎么存到SMEM的。这里有两层，一个是SMEM存出到global，在epilogue/collective/store。另一个是load，从global读到SMEM。理解所需要的格式到底是什么样，方法是打印。对第一种，对矩阵A和B分别有规律赋值。然后打印出SMEM的值。观察值是怎么排布的。对第二种，我们对global有规律赋值（当然每个位置都不可以一样），然后打印SMEM的值。

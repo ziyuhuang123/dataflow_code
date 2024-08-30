@@ -1099,6 +1099,7 @@ CUTE_HOST_DEVICE void print_tensor(Tensor<Engine,Layout> const& tensor, bool pri
   } else
   if constexpr (Layout::rank == 2)
   {
+    printf("Layout::rank == 2\n");
     for (int m = 0; m < size<0>(tensor); ++m) {
       for (int n = 0; n < size<1>(tensor); ++n) {
         pretty_print(tensor(m,n));
@@ -1108,6 +1109,7 @@ CUTE_HOST_DEVICE void print_tensor(Tensor<Engine,Layout> const& tensor, bool pri
   } else
   if constexpr (Layout::rank == 3)
   {
+    printf("Layout::rank == 3\n");
     print_tensor(tensor(_,_,0), false);
     for (int k = 1; k < size<2>(tensor); ++k) {
       for (int i = 0; i < 5*size<1>(tensor); ++i) { print("-"); } print("\n");
@@ -1116,6 +1118,7 @@ CUTE_HOST_DEVICE void print_tensor(Tensor<Engine,Layout> const& tensor, bool pri
   } else
   if constexpr (Layout::rank == 4)
   {
+    printf("Layout::rank == 4\n");
     print_tensor(tensor(_,_,_,0), false);
     for (int p = 1; p < size<3>(tensor); ++p) {
       for (int i = 0; i < 5*size<1>(tensor); ++i) { print("="); } print("\n");

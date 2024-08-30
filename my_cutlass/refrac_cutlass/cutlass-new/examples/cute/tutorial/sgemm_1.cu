@@ -93,19 +93,17 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   //
   // Full and Tiled Tensors
   //
+  Tensor mC = make_tensor(make_gmem_ptr(C), select<0,1>(shape_MNK), dC); // (M,N)
 
-  // // Represent the full tensors
-  // Tensor mA = make_tensor(make_gmem_ptr(A), select<0,2>(shape_MNK), dA); // (M,K)
-  // Tensor mB = make_tensor(make_gmem_ptr(B), select<1,2>(shape_MNK), dB); // (N,K)
-  // Tensor mC = make_tensor(make_gmem_ptr(C), select<0,1>(shape_MNK), dC); // (M,N)
+  // Represent the full tensors
+  Tensor mA = make_tensor(make_gmem_ptr(A), select<0,2>(shape_MNK), dA); // (M,K) (5120,4096):(_1,5120)
+  Tensor mB = make_tensor(make_gmem_ptr(B), select<1,2>(shape_MNK), dB); // (N,K) (2048,4096):(_1,2048)
 
-  Tensor mA = make_tensor(make_gmem_ptr(A), make_shape(1024,512,1,10)); // (M,K)
-
-
+  auto cta_tiler = Shape<_128, _256, _8>{};
   // Get the appropriate blocks for this thread block
   auto cta_coord = make_coord(blockIdx.x, blockIdx.y, _);              // (m,n,k)
-  Tensor gA = local_tile(mA, cta_tiler, cta_coord, Step<_1, X,_1>{});  // (BLK_M,BLK_K,k)
-  // Tensor gB = local_tile(mB, cta_tiler, cta_coord, Step<X,_1,_1>{});  // (BLK_N,BLK_K,k)
+  Tensor gA = local_tile(mA, cta_tiler, cta_coord, Step<_1, X,_1>{});  // (BLK_M,BLK_K,k) (_128,_8,512):(_1,5120,40960)
+  Tensor gB = local_tile(mB, cta_tiler, cta_coord, Step<X,_1,_1>{});  // (BLK_N,BLK_K,k)  (_256,_8,512):(_1,2048,16384)
 
 
 

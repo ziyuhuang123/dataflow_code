@@ -218,13 +218,6 @@ public:
     ClusterBarrier::wait(&this->barrier_, phase);
   }
 
-
-  CUTLASS_DEVICE
-  void print_barrier_value() const {
-    ClusterBarrier::print_barrier_value(&this->barrier_);
-  }
-
-
   // Barrier arrive on local smem
   CUTLASS_DEVICE
   void arrive() const {
@@ -256,27 +249,17 @@ public:
 #endif
   }
 
-  CUTLASS_DEVICE
-  static void print_barrier_value(ValueType const* smem_ptr) {
-    uint64_t barrier_value;
-    uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
-
-    // 使用 `ld.shared` 从共享内存地址中加载值
-    asm volatile(
-        "{\n\t"
-        "ld.shared.b64 %0, [%1];\n\t"  // 从共享内存加载64位的值到寄存器
-        "}"
-        : "=l"(barrier_value)  // 输出到 barrier_value
-        : "r"(smem_addr)       // 输入smem_addr
-    );
-
-    // 打印加载的值
-    printf("Barrier value: %llu\n", barrier_value);
-  } // 为了调试代码。之后可以删掉
-
   // Static version of wait - in case we don't want to burn a register
   CUTLASS_DEVICE
   static void wait(ValueType const* smem_ptr, uint32_t phase) {
+
+
+    // if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
+    //   printf("enter barrier 265 wait, phase=%d\n", phase);
+    // }
+
+
+
 #if CUDA_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
     // Arbitrarily large timer value after which try-wait expires and re-tries.
@@ -297,6 +280,13 @@ public:
     asm volatile ("brkpt;\n" ::);
 #endif
   }
+
+
+
+// 上面的wait和下面的try_wait有什么区别：wait是有循环，try_wait就一次。
+// LAB_WAIT: ... bra LAB_WAIT; 这个代码段展示了一个典型的循环。这个循环会持续调用 mbarrier.try_wait.parity.shared::cta.b64 指令，并且会反复检查 P1 寄存器的值。
+// 如果 P1 为 false（即屏障条件未满足），则会跳转回 LAB_WAIT 标签，继续等待。这会导致线程不断重复等待直到屏障条件满足。
+
 
   CUTLASS_DEVICE
   static bool test_wait(ValueType const* smem_ptr, uint32_t phase, uint32_t pred) {
@@ -409,12 +399,18 @@ struct ClusterTransactionBarrier : public ClusterBarrier {
   // Performs an arrive operation + expected transaction bytes increment
   CUTLASS_DEVICE
   void arrive_and_expect_tx(uint32_t transaction_bytes) const {
+    // if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
+    //   printf("barrier 403\n");
+    // } // 会进入这里
     ClusterTransactionBarrier::arrive_and_expect_tx(&this->barrier_, transaction_bytes);
   }
 
   // Performs an arrive operation + expected transaction bytes increment
   CUTLASS_DEVICE
   void arrive_and_expect_tx(uint32_t transaction_bytes, uint32_t cta_id, uint32_t pred = 1u) const {
+    // if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
+    //   printf("barrier 412\n");
+    // }
     ClusterTransactionBarrier::arrive_and_expect_tx(&this->barrier_, transaction_bytes , cta_id, pred);
   }
 
@@ -461,6 +457,9 @@ struct ClusterTransactionBarrier : public ClusterBarrier {
   CUTLASS_DEVICE
   static void arrive_and_expect_tx(
       ValueType const* smem_ptr, uint32_t transaction_bytes, uint32_t cta_id, uint32_t pred) {
+    // if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
+    //   printf("barrier 464\n");
+    // }
 #if CUDA_BARRIER_ENABLED
     uint32_t smem_addr = cute::cast_smem_ptr_to_uint(smem_ptr);
     asm volatile(
@@ -558,7 +557,7 @@ struct ClusterTransactionBarrier : public ClusterBarrier {
 // Helps with visibility of barrier init operations across warps / cta / cluster
 // Available as a separate function so as to batch inits across barriers and fence once
 // Note : It must be composed with an appropriate sync instruction with the right scope
-// to ensure visibility eg. __syncthreads() or a cluster_arrive() + cluster_wait()
+// to ensure visibility eg. __syncthreads() or a cluster_arrive() + cluster_wait() --->题外话，看得出来，__syncthreads() 等同于 cluster_arrive() + cluster_wait()，不过后者是不是必须整个cluster进行同步。。
 CUTLASS_DEVICE
 void fence_barrier_init() {
 #if CUDA_BARRIER_ENABLED

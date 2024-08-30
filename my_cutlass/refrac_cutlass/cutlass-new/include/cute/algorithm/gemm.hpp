@@ -85,6 +85,9 @@ gemm(MMA_Atom<MMA>       const& mma,
      Tensor<TB, BLayout> const& B,
      Tensor<TC, CLayout>      & C)
 {
+  if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==383&&threadIdx.y==0){
+    // printf("cute/gemm-89\n");
+  }
   return gemm(mma, C, A, B, C);
 }
 
@@ -129,6 +132,9 @@ gemm(MMA_Atom<MMA>       const& mma,
      Tensor<TB, BLayout> const& B,
      Tensor<TC, CLayout>     && C)
 {
+  if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==383&&threadIdx.y==0){
+    // printf("cute/gemm-136\n");
+  }
   return gemm(mma, C, A, B, C);
 }
 
@@ -145,6 +151,9 @@ gemm(MMA_Atom<MMA>       const& mma,
      Tensor<TB, BLayout> const& B,
      Tensor<TC, CLayout> const& C)
 {
+  if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==383&&threadIdx.y==0){
+    // printf("cute/gemm-155\n");
+  }
   return gemm(mma, D, A, B, C);
 }
 
@@ -193,6 +202,9 @@ gemm(MMA_Atom<MMA>       const& mma,
      Tensor<TB, BLayout> const& B,  // (V) Logical data
      Tensor<TC, CLayout> const& C)  // (V) Logical data
 {
+  if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==383&&threadIdx.y==0){
+    // printf("cute/gemm-206\n");
+  }
   // No static assertions on (V), MMA checks compatibility
   mma.call(D, A, B, C);
 }
@@ -243,6 +255,7 @@ gemm(MMA_Atom<MMA>       const& mma,
      Tensor<TB, BLayout> const& B,  // (N,K) Logical data
      Tensor<TC, CLayout> const& C)  // (M,N) Logical data
 {
+
   CUTE_STATIC_ASSERT_V(size<0>(A) == size<0>(C));  // AM == CM
   CUTE_STATIC_ASSERT_V(size<0>(B) == size<1>(C));  // BN == CN
   CUTE_STATIC_ASSERT_V(size<1>(A) == size<1>(B));  // AK == BK
@@ -278,6 +291,9 @@ gemm(MMA_Atom<MMA>       const& mma,
      Tensor<TB, BLayout> const& B,  // (V,N)   Logical data
      Tensor<TC, CLayout> const& C)  // (V,M,N) Logical data
 {
+  if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==383&&threadIdx.y==0){
+    // printf("cute/gemm-295\n");
+  }
   CUTE_STATIC_ASSERT_V(size<1>(A) == size<1>(C));  // AM == CM
   CUTE_STATIC_ASSERT_V(size<1>(B) == size<2>(C));  // BN == CN
   CUTE_STATIC_ASSERT_V(size<0>(C) == size<0>(D) && size<1>(C) == size<1>(D) && size<2>(C) == size<2>(D));
@@ -403,6 +419,9 @@ gemm(MMA_Atom<MMA>       const& mma,
      Tensor<TB, BLayout> const& B,  // (V,N,K) Logical data
      Tensor<TC, CLayout> const& C)  // (V,M,N) Logical data
 {
+  if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==383&&threadIdx.y==0){
+    // printf("cute/gemm-407\n");
+  }
   CUTE_STATIC_ASSERT_V(size<1>(A) == size<1>(C));  // AM == CM
   CUTE_STATIC_ASSERT_V(size<1>(B) == size<2>(C));  // BN == CN
   CUTE_STATIC_ASSERT_V(size<2>(A) == size<2>(B));  // AK == BK
@@ -442,6 +461,9 @@ gemm(MMA_Atom<MMA>       const& mma,
      Tensor<TB, BLayout> const& B,  // (N,K) Logical data
      Tensor<TC, CLayout> const& C)  // (M,N) Logical data
 {
+  if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==383&&threadIdx.y==0){
+    // printf("cute/gemm-449\n");
+  }
   CUTE_STATIC_ASSERT_V(size<0>(A) == size<0>(C));  // AM == CM
   CUTE_STATIC_ASSERT_V(size<0>(B) == size<1>(C));  // BN == CN
   CUTE_STATIC_ASSERT_V(size<1>(A) == size<1>(B));  // AK == BK
@@ -477,6 +499,9 @@ gemm(MMA_Atom<MMA>       const& mma,
      Tensor<TB, BLayout> const& B,  // (V,N,K) Logical data
      Tensor<TC, CLayout> const& C)  // (V,M,N) Logical data
 {
+  if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==383&&threadIdx.y==0){
+    // printf("cute/gemm-487\n");
+  }
   CUTE_STATIC_ASSERT_V(size<1>(A) == size<1>(C));  // AM == CM
   CUTE_STATIC_ASSERT_V(size<1>(B) == size<2>(C));  // BN == CN
   CUTE_STATIC_ASSERT_V(size<2>(A) == size<2>(B));  // AK == BK

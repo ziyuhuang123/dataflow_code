@@ -426,7 +426,7 @@ public:
     auto problem_shape_MNKL = append<5>(params.problem_shape, Int<1>{});
 
 
-    // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
+    // if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
 
     //   int shape_0 = cute::get<0>(problem_shape_MNKL);
     //   int shape_1 = cute::get<1>(problem_shape_MNKL);
@@ -501,7 +501,7 @@ public:
           auto work_k_tile_start = TileScheduler::get_work_k_tile_start(work_tile_info);
           auto k_tile_iter = cute::make_coord_iterator(idx2crd(work_k_tile_start, shape<3>(gA_mkl)), shape<3>(gA_mkl));
 
-          // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
+          // if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
           //   int m_dim = cute::get<0>(blk_shape);
           //   int n_dim = cute::get<1>(blk_shape);
           //   int k_dim = cute::get<2>(blk_shape);
@@ -532,13 +532,18 @@ public:
           mainloop_pipe_producer_state.advance(work_k_tile_count);
 
 
-          // Make sure all Consumer Warp Groups have been waited upon // 这个到底是干什么的？我去提问了。还在等。不过这里要是没这句话，或者移到最末尾处，会对第二个GEMM开始时的sync造成永久循环。。。暂时不得不放在这里。
+          // Make sure all Consumer Warp Groups have been waited upon
           collective_mainloop.load_tail(mainloop_pipeline, mainloop_pipe_producer_state); 
+
 
         } // Mainloop Producer Warp End
       } // Producer Warp Group End
-
       else if (warp_group_role == WarpGroupRole::Consumer0 || warp_group_role == WarpGroupRole::Consumer1) {
+
+
+        if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==383&&threadIdx.y==0){
+          printf("enter consumer once\n");
+        }
         cutlass::arch::warpgroup_reg_alloc<MmaRegisterRequirement>();
 
         // CollectiveEpilogue collective_epilogue(params.epilogue, shared_storage.tensors.epilogue);
@@ -619,62 +624,15 @@ public:
 
       } // Consumer Warp Groups End
 
-
-
-
-
-
-
-
-
-
-
-      // mainloop_pipe_producer_state.reset_initial_start_state();
-
-
-
-      // PipelineState mainloop_pipe_producer_state = cutlass::make_producer_start_state<MainloopPipeline>();
-      // typename CollectiveMainloop::PipelineState mainloop_pipe_consumer_state;
-
-
-
-      // cute::cluster_arrive_relaxed();
-      // cute::cluster_wait();
+      
       __syncthreads();// 不需要全cluster一起sync。block_sync即可了。
-      // // 这里要加while。对GEMM1进行N维度的循环。充分利用GEMM0的结果。
       int n_dim = cute::get<1>(blk_shape); // 这里很奇怪的是，如果直接打印cute::get<2>(blk_shape)则会乱七八糟。比如先定义一下，声明是int才行。
       int k_dim = cute::get<2>(blk_shape);
       int gemm1_N_tile_current = 0; // 不论上面GEMM0算的是哪一块，中间结果都需要对GEMM1的所有列遍历，所以都得是从0开始到最大。
       int gemm1_N_tile_max = int(cute::get<4>(problem_shape_MNKL)/n_dim); // 就是problem_shape那个
-      // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
 
-      //   int shape_0 = cute::get<0>(problem_shape_MNKL);
-      //   int shape_1 = cute::get<1>(problem_shape_MNKL);
-      //   int shape_2 = cute::get<2>(problem_shape_MNKL);
-      //   int shape_3 = cute::get<3>(problem_shape_MNKL);
-      //   int shape_4 = cute::get<4>(problem_shape_MNKL);
-      //   // int shape_5 = cute::get<5>(problem_shape_MNKL);
-      //   // Printing the values
-      //   printf("shape_0 = %d, shape_1 = %d, shape_2 = %d, shape_3 = %d, shape_4 = %d\n", shape_0, shape_1, shape_2, shape_3, shape_4);
-
-      //   printf("gemm1_N_tile_max=%d\n", gemm1_N_tile_max);
-      //   printf("problem_shape_MNKL[3] = %d, n_dim = %d, gemm1_N_tile_max = %d\n",
-      //  int(cute::get<4>(problem_shape_MNKL)),
-      //  n_dim,
-      //  gemm1_N_tile_max);  // gemm1_N_tile_max这里是k/tile_n=4096/256=16
-      // }
-
-      // auto work_tile_info = scheduler.initial_work_tile_info(ClusterShape{});
-
-      // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
-      //   printf("enter outer\n");
-      // }
 
       while(gemm1_N_tile_current < gemm1_N_tile_max){
-
-        // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
-        //   printf("enter here\n");
-        // }
         if (warp_group_role == WarpGroupRole::Producer) {
           cutlass::arch::warpgroup_reg_dealloc<LoadRegisterRequirement>();
 
@@ -704,10 +662,10 @@ public:
 
 
 
-            // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
+            // if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
             //   printf("enter here 713\n");
             // } // _gemm1
-            collective_mainloop.load_new(
+            collective_mainloop.load_gemm1(
               params.mainloop,
               mainloop_pipeline,
               mainloop_pipe_producer_state,
@@ -718,19 +676,18 @@ public:
               block_rank_in_cluster,
               shared_storage.tensors.mainloop
             );
-            // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
+            // if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
             //   printf("enter here 725\n");
             // }
 
             // // Update starting pipeline state for the next tile
             mainloop_pipe_producer_state.advance(work_k_tile_count);
-            // if(blockIdx.x==0&&blockIdx.y==20&&threadIdx.x==0&&threadIdx.y==0){
+            // if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
             //   printf("enter here 731\n");
             // }
             collective_mainloop.load_tail(mainloop_pipeline, mainloop_pipe_producer_state);
           } // Mainloop Producer Warp End
         } // Producer Warp Group End
-
         else if (warp_group_role == WarpGroupRole::Consumer0 || warp_group_role == WarpGroupRole::Consumer1) {
           cutlass::arch::warpgroup_reg_alloc<MmaRegisterRequirement>();
 
@@ -743,10 +700,10 @@ public:
           // Compute m_coord, n_coord, l_coord with the post-tiled m-shape and n-shape
           auto m_coord = idx2crd(work_tile_info.M_idx, shape<2>(gA_mkl)); // 因为都是同一行，所以这个不改倒是无妨
           auto n_coord = gemm1_N_tile_current;
-          auto l_coord = 0;
+          auto l_coord = 0; // 这个是batch维度，原先就是0.这里保持不动。
           auto blk_coord = make_coord(m_coord, n_coord, _, l_coord);
-          auto work_k_tile_count = int(n_dim/k_dim);
-          // auto work_k_tile_count = TileScheduler::get_work_k_tile_count(work_tile_info, problem_shape_MNKL, blk_shape);
+          auto work_k_tile_count = int(n_dim/k_dim); // 就是说一个block只迭代n_dim/k_dim个k，就是4个。
+
 
           // Allocate the accumulators for the (M,N) blk_shape
           //
@@ -822,358 +779,17 @@ public:
 
 
 
-
+      // if(blockIdx.x==0&&blockIdx.y==1&&threadIdx.x==0&&threadIdx.y==0){
+      //   printf("end one iter\n");
+      // }
 
 
       work_tile_info = scheduler.fetch_next_work(work_tile_info); // 这个之前放在GEMM0和GEMM1之间，所以等到最后一轮，GEMM1就会访问到错误地址。就报错。现在放到最后就不会报错了。
 
     }
-
-
-
-
-
-
-
-
-
-
-
-
-    // if (warp_group_role == WarpGroupRole::Producer) {
-    //   // Make sure all Consumer Warp Groups have been waited upon // 这个到底是干什么的？
-    //   collective_mainloop.load_tail(mainloop_pipeline, mainloop_pipe_producer_state); 
-    // }
-    // if (warp_group_role == WarpGroupRole::Consumer0 || warp_group_role == WarpGroupRole::Consumer1) {
-    //   if (do_store_tail) {
-    //     collective_epilogue.store_tail(
-    //       epi_load_pipeline,
-    //       epi_load_pipe_consumer_state,
-    //       epi_store_pipeline,
-    //       epi_store_pipe_producer_state
-    //     );
-    //   }
-    // }
-
-
-
-
-
-
-
-
-    // if (warp_group_role == WarpGroupRole::Producer) {
-    //   cutlass::arch::warpgroup_reg_dealloc<LoadRegisterRequirement>();
-
-    //   CollectiveEpilogue collective_epilogue(params.epilogue, shared_storage.tensors.epilogue);
-
-    //   // Mainloop Producer Warp
-    //   if (producer_warp_role == ProducerWarpRole::Mainloop) {
-    //     // bool do_load_order_arrive = true;
-    //     while (work_tile_info.is_valid()) {
-    //       // if (!TileScheduler::valid_warpgroup_in_work_tile(work_tile_info)) {
-    //       //   work_tile_info = scheduler.fetch_next_work(work_tile_info);
-    //       //   continue;
-    //       // } // 这里就不会进入。
-
-    //       // Compute m_coord, n_coord, l_coord with the post-tiled m-shape and n-shape
-    //       auto m_coord = idx2crd(work_tile_info.M_idx, shape<2>(gA_mkl));
-    //       auto n_coord = idx2crd(work_tile_info.N_idx, shape<2>(gB_nkl));
-    //       auto l_coord = idx2crd(work_tile_info.L_idx, shape<4>(gB_nkl));
-    //       auto blk_coord = make_coord(m_coord, n_coord, _, l_coord);
-
-    //       // Get the number of K tiles to compute for this work as well as the starting K tile offset of the work.
-    //       auto work_k_tile_count = TileScheduler::get_work_k_tile_count(work_tile_info, problem_shape_MNKL, blk_shape);
-    //       auto work_k_tile_start = TileScheduler::get_work_k_tile_start(work_tile_info);
-    //       auto k_tile_iter = cute::make_coord_iterator(idx2crd(work_k_tile_start, shape<3>(gA_mkl)), shape<3>(gA_mkl));
-
-    //       collective_mainloop.load(
-    //         params.mainloop,
-    //         mainloop_pipeline,
-    //         mainloop_pipe_producer_state,
-    //         load_inputs,
-    //         blk_coord,
-    //         k_tile_iter, work_k_tile_count,
-    //         lane_idx,
-    //         block_rank_in_cluster,
-    //         shared_storage.tensors.mainloop
-    //       );
-    //       // Update starting pipeline state for the next tile
-    //       mainloop_pipe_producer_state.advance(work_k_tile_count);
-
-    //       // // Signal for the epilogue load warp to begin
-    //       // if (do_load_order_arrive) {
-    //       //   load_order_barrier.arrive();
-    //       //   do_load_order_arrive = false;
-    //       // }
-
-    //       // Get next work tile
-    //       work_tile_info = scheduler.fetch_next_work(work_tile_info);
-    //     } // Scheduler work fetch loop
-
-
-
-
-
-
-    //     // // Compute m_coord, n_coord, l_coord with the post-tiled m-shape and n-shape
-    //     // auto m_coord = idx2crd(work_tile_info.M_idx, shape<2>(gA_mkl));
-    //     // auto n_coord = idx2crd(work_tile_info.N_idx, shape<2>(gB_nkl));
-    //     // auto l_coord = idx2crd(work_tile_info.L_idx, shape<4>(gB_nkl));
-    //     // auto blk_coord = make_coord(m_coord, n_coord, _, l_coord);
-
-    //     // // Get the number of K tiles to compute for this work as well as the starting K tile offset of the work.
-    //     // auto work_k_tile_count = TileScheduler::get_work_k_tile_count(work_tile_info, problem_shape_MNKL, blk_shape);
-    //     // auto work_k_tile_start = TileScheduler::get_work_k_tile_start(work_tile_info);
-    //     // auto k_tile_iter = cute::make_coord_iterator(idx2crd(work_k_tile_start, shape<3>(gA_mkl)), shape<3>(gA_mkl));
-
-    //     // collective_mainloop.load(
-    //     //   params.mainloop,
-    //     //   mainloop_pipeline,
-    //     //   mainloop_pipe_producer_state,
-    //     //   load_inputs,
-    //     //   blk_coord,
-    //     //   k_tile_iter, work_k_tile_count,
-    //     //   lane_idx,
-    //     //   block_rank_in_cluster,
-    //     //   shared_storage.tensors.mainloop
-    //     // );
-    //     // // Update starting pipeline state for the next tile
-    //     // mainloop_pipe_producer_state.advance(work_k_tile_count);
-
-
-
-
-
-
-    //     // Make sure all Consumer Warp Groups have been waited upon
-    //     collective_mainloop.load_tail(mainloop_pipeline, mainloop_pipe_producer_state);
-
-    //   } // Mainloop Producer Warp End
-
-    //   // // Epilogue Producer Warp  // 在example49的多个例子里，注释掉这里不影响正确性
-    //   // else if (producer_warp_role == ProducerWarpRole::Epilogue && collective_epilogue.is_producer_load_needed()) {
-    //   //   if (!TileScheduler::requires_separate_reduction(params.scheduler) && work_tile_info.is_valid()) {
-    //   //     load_order_barrier.wait();
-    //   //   }
-    //   //   while (work_tile_info.is_valid()) {
-    //   //     if (TileScheduler::compute_epilogue(work_tile_info, params.scheduler)) {
-    //   //       // Compute m_coord, n_coord, l_coord with the post-tiled m-shape and n-shape
-    //   //       auto m_coord = idx2crd(work_tile_info.M_idx, shape<2>(gA_mkl));
-    //   //       auto n_coord = idx2crd(work_tile_info.N_idx, shape<2>(gB_nkl));
-    //   //       auto l_coord = idx2crd(work_tile_info.L_idx, shape<4>(gB_nkl));
-    //   //       auto blk_coord = make_coord(m_coord, n_coord, _, l_coord);
-
-    //   //       epi_load_pipe_producer_state =
-    //   //       collective_epilogue.load(
-    //   //         epi_load_pipeline,
-    //   //         epi_load_pipe_producer_state,
-    //   //         problem_shape_MNKL,
-    //   //         blk_shape,
-    //   //         blk_coord,
-    //   //         tiled_mma,
-    //   //         lane_idx,
-    //   //         shared_storage.tensors.epilogue,
-    //   //         work_tile_info.reduction_subtile_idx()
-    //   //       );
-    //   //     }
-
-    //   //     // Get next work tile
-    //   //     work_tile_info = scheduler.fetch_next_work(work_tile_info);
-    //   //   } // Scheduler work fetch loop
-
-    //   //   // Make sure all Consumer Warp Groups have been waited upon
-    //   //   collective_epilogue.load_tail(epi_load_pipeline, epi_load_pipe_producer_state);
-    //   // } // Epilogue Producer Warp End
-    // } // Producer Warp Group End
-
-    // else if (warp_group_role == WarpGroupRole::Consumer0 || warp_group_role == WarpGroupRole::Consumer1) {
-    //   cutlass::arch::warpgroup_reg_alloc<MmaRegisterRequirement>();
-
-    //   CollectiveEpilogue collective_epilogue(params.epilogue, shared_storage.tensors.epilogue);
-
-    //   // Do we potentially issue tail arrives for TMA stores, if epilogue load is waiting for it
-    //   bool do_store_tail = false;
-    //   while (work_tile_info.is_valid()) {
-    //     // Compute m_coord, n_coord, l_coord with the post-tiled m-shape and n-shape
-    //     auto m_coord = idx2crd(work_tile_info.M_idx, shape<2>(gA_mkl));
-    //     auto n_coord = idx2crd(work_tile_info.N_idx, shape<2>(gB_nkl));
-    //     auto l_coord = idx2crd(work_tile_info.L_idx, shape<4>(gB_nkl));
-    //     auto blk_coord = make_coord(m_coord, n_coord, _, l_coord);
-    //     auto work_k_tile_count = TileScheduler::get_work_k_tile_count(work_tile_info, problem_shape_MNKL, blk_shape);
-
-    //     // Allocate the accumulators for the (M,N) blk_shape
-    //     //
-    //     // MSVC CTAD breaks if we say "Tensor" here, so we use "auto" instead.
-    //     auto accumulators = partition_fragment_C(tiled_mma, take<0,2>(blk_shape));               // (MMA,MMA_M,MMA_N)
-    //     if(TileScheduler::valid_warpgroup_in_work_tile(work_tile_info)) {
-    //       collective_mainloop.mma(
-    //         mainloop_pipeline,
-    //         mainloop_pipe_consumer_state,
-    //         accumulators,
-    //         work_k_tile_count,
-    //         mma_thread_idx,
-    //         shared_storage.tensors.mainloop,
-    //         params.mainloop
-    //       );
-
-    //       // Make sure the math instructions are done and free buffers before entering the epilogue
-    //       collective_mainloop.mma_tail(
-    //         mainloop_pipeline,
-    //         mainloop_pipe_consumer_state,
-    //         work_k_tile_count
-    //       );
-
-    //       // Update starting mainloop pipeline state for the next tile
-    //       mainloop_pipe_consumer_state.advance(work_k_tile_count);
-    //     }
-    //     // Index of warp group within consumer warp groups
-    //     int consumer_warp_group_idx = canonical_warp_group_idx() - NumLoadWarpGroups;
-
-    //     // Perform reduction across splits, if needed
-    //     TileScheduler::fixup(
-    //       params.scheduler, work_tile_info, accumulators, NumMmaWarpGroups, consumer_warp_group_idx);
-
-    //     if (TileScheduler::compute_epilogue(work_tile_info, params.scheduler)) {
-    //       // Epilogue and write to gD
-    //       auto [epi_load_pipe_consumer_state_next, epi_store_pipe_producer_state_next] =
-    //       collective_epilogue.store(
-    //         epi_load_pipeline,
-    //         epi_load_pipe_consumer_state,
-    //         epi_store_pipeline,
-    //         epi_store_pipe_producer_state,
-    //         problem_shape_MNKL,
-    //         blk_shape,
-    //         blk_coord,
-    //         accumulators,
-    //         tiled_mma,
-    //         mma_thread_idx,
-    //         shared_storage.tensors.epilogue,
-    //         work_tile_info.reduction_subtile_idx()
-    //       );
-    //       epi_load_pipe_consumer_state = epi_load_pipe_consumer_state_next;
-    //       epi_store_pipe_producer_state = epi_store_pipe_producer_state_next;
-    //       do_store_tail = true;
-    //     }
-
-    //     // Get next work tile
-    //     work_tile_info = scheduler.fetch_next_work(work_tile_info);
-    //   } // Scheduler work fetch loop
-
-
-
-
-
-
-
-
-    //   // // Compute m_coord, n_coord, l_coord with the post-tiled m-shape and n-shape
-    //   // auto m_coord = idx2crd(work_tile_info.M_idx, shape<2>(gA_mkl));
-    //   // auto n_coord = idx2crd(work_tile_info.N_idx, shape<2>(gB_nkl));
-    //   // auto l_coord = idx2crd(work_tile_info.L_idx, shape<4>(gB_nkl));
-    //   // auto blk_coord = make_coord(m_coord, n_coord, _, l_coord);
-    //   // auto work_k_tile_count = TileScheduler::get_work_k_tile_count(work_tile_info, problem_shape_MNKL, blk_shape);
-
-    //   // // Allocate the accumulators for the (M,N) blk_shape
-    //   // //
-    //   // // MSVC CTAD breaks if we say "Tensor" here, so we use "auto" instead.
-    //   // auto accumulators = partition_fragment_C(tiled_mma, take<0,2>(blk_shape));               // (MMA,MMA_M,MMA_N)
-    //   // if(TileScheduler::valid_warpgroup_in_work_tile(work_tile_info)) {
-    //   //   collective_mainloop.mma(
-    //   //     mainloop_pipeline,
-    //   //     mainloop_pipe_consumer_state,
-    //   //     accumulators,
-    //   //     work_k_tile_count,
-    //   //     mma_thread_idx,
-    //   //     shared_storage.tensors.mainloop,
-    //   //     params.mainloop
-    //   //   );
-
-    //   //   // Make sure the math instructions are done and free buffers before entering the epilogue
-    //   //   collective_mainloop.mma_tail(
-    //   //     mainloop_pipeline,
-    //   //     mainloop_pipe_consumer_state,
-    //   //     work_k_tile_count
-    //   //   );
-
-    //   //   // Update starting mainloop pipeline state for the next tile
-    //   //   mainloop_pipe_consumer_state.advance(work_k_tile_count);
-    //   // }
-    //   // // Index of warp group within consumer warp groups
-    //   // int consumer_warp_group_idx = canonical_warp_group_idx() - NumLoadWarpGroups;
-
-    //   // // Perform reduction across splits, if needed
-    //   // TileScheduler::fixup(
-    //   //   params.scheduler, work_tile_info, accumulators, NumMmaWarpGroups, consumer_warp_group_idx);
-
-    //   // if (TileScheduler::compute_epilogue(work_tile_info, params.scheduler)) {
-    //   //   // Epilogue and write to gD
-    //   //   auto [epi_load_pipe_consumer_state_next, epi_store_pipe_producer_state_next] =
-    //   //   collective_epilogue.store(
-    //   //     epi_load_pipeline,
-    //   //     epi_load_pipe_consumer_state,
-    //   //     epi_store_pipeline,
-    //   //     epi_store_pipe_producer_state,
-    //   //     problem_shape_MNKL,
-    //   //     blk_shape,
-    //   //     blk_coord,
-    //   //     accumulators,
-    //   //     tiled_mma,
-    //   //     mma_thread_idx,
-    //   //     shared_storage.tensors.epilogue,
-    //   //     work_tile_info.reduction_subtile_idx()
-    //   //   );
-    //   //   epi_load_pipe_consumer_state = epi_load_pipe_consumer_state_next;
-    //   //   epi_store_pipe_producer_state = epi_store_pipe_producer_state_next;
-    //   //   do_store_tail = true;
-    //   // }
-
-
-
-
-
-
-    //   if (do_store_tail) {
-    //     collective_epilogue.store_tail(
-    //       epi_load_pipeline,
-    //       epi_load_pipe_consumer_state,
-    //       epi_store_pipeline,
-    //       epi_store_pipe_producer_state
-    //     );
-    //   }
-    // } // Consumer Warp Groups End
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #endif
+
+
   }
 
 };
