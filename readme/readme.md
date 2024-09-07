@@ -430,3 +430,28 @@ full_barrier是使用expect-tx！？这是什么作用（根据PTX，似乎是�
 0830
 上午中午组会
 下午打算搞明白GEMM0到底是怎么存到SMEM的。这里有两层，一个是SMEM存出到global，在epilogue/collective/store。另一个是load，从global读到SMEM。理解所需要的格式到底是什么样，方法是打印。对第一种，对矩阵A和B分别有规律赋值。然后打印出SMEM的值。观察值是怎么排布的。对第二种，我们对global有规律赋值（当然每个位置都不可以一样），然后打印SMEM的值。
+
+
+0907
+
+因为sm90上的GEMM0-store-SMEM-load-GEMM1因为swizzle和layout太复杂，我搞不明白，决定跳过。借用example13的b2b来解决这个问题。今天主要是跑通了此案例，写了一些细节到HZY技术文档。
+
+1. 找到load store分别定义在哪里？一来为了后续我对D矩阵的再次读取。二来为了有可能我回去修改自己sm90的版本。
+
+是有专门的iterator来实现。不过似乎是
+  using IteratorA0 =
+      cutlass::transform::threadblock::PredicatedTileAccessIterator<
+          cutlass::MatrixShape<ThreadblockShape0::kM, ThreadblockShape0::kK>,
+          ElementA, LayoutA, 1, ThreadMapA0, AccessTypeA0>;
+  /// Shared memory iterator to A operand
+  using SmemIteratorA = transform::threadblock::RegularTileAccessIterator<
+      MatrixShape<Shape::kM, Shape::kK>, ElementA, SmemLayoutA, 1,
+      IteratorThreadMapA>;
+这种。感觉比较复杂。好在还比较清晰。
+
+
+明天的计划：
+
+2. 修改每个block的计算逻辑。加入cluster。向右移动到停止。（这就需要去寻找每个CTA负责的mnk）--->需要修改store，把中间结果存出去（额。。。这样很复杂耶）
+3. 然后修改整体计算逻辑。在最外层套一个循环，然后GEMM1有多次小循环。每次都把结果写入到global。
+4. 增加TMA-reduce。利用罗新浩的方法。
