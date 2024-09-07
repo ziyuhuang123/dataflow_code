@@ -38,6 +38,13 @@
 
 namespace cute {
 
+
+template <typename T>
+__device__ void printTypeName() {
+    printf("Type of T is: %s\n", __PRETTY_FUNCTION__);  // 或者在MSVC中使用 __FUNCSIG__
+}
+
+
 template <class... Args>
 struct MMA_Atom;
 
@@ -154,9 +161,20 @@ struct MMA_Atom<MMA_Traits<Args...>>
       // If the intended FrgTypeA is a view (of the current tensor), forward the whole
       static_assert(is_same<ValTypeA, typename remove_cvref_t<ATensor>::value_type>::value
                       , "Expecting ValTypeA type");
+      // if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==383&&threadIdx.y==0){
+      //   printf("enter 1\n");---->结果表明会进入enter1这里
+      //   printTypeName<FrgTypeA>();  // 现在会打印FrgTypeA的实际类型
+      // }
+      // static_assert(std::is_pointer<FrgTypeA>::value, "FrgTypeA is not a pointer type.");
+      // static_assert(std::is_same<FrgTypeA, cutlass::half_t>::value, "FrgTypeA is not of type cutlass::half_t.");
+
+
       return make_tensor<FrgTypeA>(static_cast<ATensor&&>(atensor));
     } else {
       // Else, the intended FrgTypeA is a value type, construct a new tensor with a fragment layout
+      // if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==383&&threadIdx.y==0){
+      //   printf("enter 2\n");
+      // }
       return make_fragment_like<FrgTypeA>(atensor);
     }
 

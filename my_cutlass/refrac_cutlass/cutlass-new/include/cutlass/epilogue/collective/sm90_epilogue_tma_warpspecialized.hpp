@@ -776,6 +776,7 @@ public:
     // Pre-loop fusion callback entry point
     cst_callbacks.begin();
 
+
     // For each output tile
     CUTLASS_PRAGMA_UNROLL
     for (int epi_n = 0; epi_n < size<3>(gD_epi); ++epi_n) {
@@ -876,13 +877,91 @@ public:
 
 
     if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==383&&threadIdx.y==0){
+      printf("print_value_bSG_sD\n");
       printf("\n");
-      print(tRS_sD);
-      printf("   tRS_sD\n");
-      print(bSG_sD);
+      
+      print_tensor(bSG_sD);
       printf("   bSG_sD\n");
-      print(bSG_gD);
-      printf("   bSG_gD\n");
+      printf("\n print bSG_sD_col-指针\n");
+      for (int m = 0; m < 32768; ++m) {
+        printf("%*.5f    ", 10, float(bSG_sD.data()[m]));
+      }
+      printf("\n print bSG_sD_col-张量\n");
+      for (int m = 0; m < 32768; ++m) {
+        printf("%*.5f    ", 10, float(bSG_sD(m)));
+      }
+      printf("\n print bSG_sD_col\n");
+      int M=64;
+      int N=256;
+      auto shape = make_shape(
+          make_shape(make_shape(Int<64>{}, Int<256>{}), Int<2>{}),  // (64, 256), 2
+          Int<1>{}, Int<1>{}, Int<1>{}                  // 1, 1, 1
+      );
+
+      // 定义列主序布局的步幅为 (1, 64), (16384), 0, 0, 0
+      auto stride = make_stride(
+          make_shape(make_shape(Int<1>{}, Int<64>{}), Int<16384>{}),  // (1, 64), 16384
+          Int<0>{}, Int<0>{}, Int<0>{}                    // 0, 0, 0
+      );
+
+      // 使用形状和步幅创建布局
+      auto layout = cute::make_layout(shape, stride);
+
+      // 创建张量，使用指针和布局
+      Tensor bSG_sD_col = cute::make_tensor(bSG_sD.data(), layout);  // 非拥有的张量
+      print_tensor(bSG_sD_col);
+      printf("\n");
+
+      // // // 打印指定范围的张量
+      // // for (int i = 0; i < M; ++i) {
+      // //     for (int j = 0; j < N; ++j) {
+      // //       printf("%*.5f    ", 10, float(bSG_sD_col(i, j)));
+      // //     }
+      // //     printf("\n");
+      // // }
+
+      // int M=128;
+      // int N=256;
+      // auto shape = cute::make_shape(M/2, N);        // 张量的形状为 (64, 256)
+      // auto stride = cute::make_stride(1, M/2);      // 列主序布局的步幅为 (1, M)
+
+      // // 使用形状和步幅创建布局
+      // auto layout = cute::make_layout(shape, stride);
+
+      // // 创建张量，使用指针和布局
+      // Tensor bSG_sD_col = cute::make_tensor(bSG_sD.data(), layout);  // 非拥有的张量
+      // print(bSG_sD_col);
+      // printf("print bSG_sD_col_upper\n");
+      // print_tensor(bSG_sD_col);
+      // 打印指定范围的张量
+      // for (int i = 0; i < M/2; ++i) {
+      //     for (int j = 0; j < N; ++j) {
+      //       printf("%*.5f    ", 10, float(bSG_sD_col(i, j)));
+      //     }
+      //     printf("\n");
+      // }
+
+      // printf("\n print bSG_sD_col_lower\n");
+
+
+      // auto base_ptr = bSG_sD.data();  // 保持为smem_ptr类型
+
+      // // 偏移指针到中间位置（M*N/2）
+      // auto offset_ptr = base_ptr + int(M * N / 2);  // 偏移位置
+
+      // // 使用偏移后的指针创建一个新的张量
+      // Tensor bSG_sD_col_lower = cute::make_tensor(offset_ptr, layout);  // 非拥有的张量
+
+
+      // print(bSG_sD_col_lower);
+      // printf("\n");
+      // // 打印指定范围的张量
+      // for (int i = 0; i < M/2; ++i) {
+      //     for (int j = 0; j < N; ++j) {
+      //       printf("%*.5f    ", 10, float(bSG_sD_col_lower(i, j)));
+      //     }
+      //     printf("\n");
+      // }
     }
 
 

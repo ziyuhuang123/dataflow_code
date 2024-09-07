@@ -148,6 +148,115 @@ using RasterOrderOptions = typename cutlass::gemm::kernel::detail::PersistentTil
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+// CUDA 内核函数：打印设备内存中的所有值-->这里要打印值出来必须写个kernel来打印。因为device_ptr是GPU上的。直接在main上写，那是host端，会报错的。
+__global__ void print_value_kernel_rowMajor(cutlass::half_t* device_ptr, int dim1, int dim2, int row_start = 0, int row_end = -1, int col_start = 0, int col_end = -1) {
+    if (threadIdx.x == 0 && blockIdx.x == 0) {  // 只在一个线程中执行打印操作
+        // 创建张量的形状和步幅
+        auto shape = cute::make_shape(dim1, dim2);
+        auto stride = cute::make_stride(dim2, 1);  // 行主序布局
+        
+        // 使用形状和步幅创建布局
+        auto layout = cute::make_layout(shape, stride);
+        
+        // 创建张量，使用指针和布局
+        Tensor tensor = cute::make_tensor(device_ptr, layout);
+        
+        // 设置默认的行和列范围
+        if (row_end == -1) row_end = dim1;  // 如果没有指定，打印所有行
+        if (col_end == -1) col_end = dim2;  // 如果没有指定，打印所有列
+
+        // 打印指定范围的张量
+        for (int i = row_start; i < row_end; ++i) {
+            for (int j = col_start; j < col_end; ++j) {
+              printf("%*.8f    ", 10, float(tensor(i, j)));
+
+                // cute::pretty_print(tensor(i, j));
+            }
+            printf("\n");
+        }
+    }
+}
+
+__global__ void print_value_kernel_colMajor(cutlass::half_t* device_ptr, int dim1, int dim2, int print_name_code, int row_start = 0, int row_end = -1, int col_start = 0, int col_end = -1) {
+    if (threadIdx.x == 0 && blockIdx.x == 0) {  // 只在一个线程中执行打印操作
+
+        // 根据传入的整数代码映射到对应的字符串
+        const char* print_name;
+        switch (print_name_code) {
+            case 1:
+                print_name = "block_A";
+                break;
+            case 2:
+                print_name = "block_B";
+                break;
+            case 3:
+                print_name = "block_D";
+                break;
+            case 4:
+                print_name = "block_ref_D";
+                break;
+            default:
+                print_name = "Unknown";
+                break;
+        }
+        
+        // 打印名称
+        printf("print_value_kernel_colMajor of %s\n", print_name);
+        
+        // 创建张量的形状和步幅
+        auto shape = cute::make_shape(dim1, dim2);
+        auto stride = cute::make_stride(1, dim1);  // 列主序布局
+        
+        // 使用形状和步幅创建布局
+        auto layout = cute::make_layout(shape, stride);
+        
+        // 创建张量，使用指针和布局
+        Tensor tensor = cute::make_tensor(device_ptr, layout);
+        
+        // 设置默认的行和列范围
+        if (row_end == -1) row_end = dim1;  // 如果没有指定，打印所有行
+        if (col_end == -1) col_end = dim2;  // 如果没有指定，打印所有列
+
+        // 打印指定范围的张量
+        for (int i = row_start; i < row_end; ++i) {
+            for (int j = col_start; j < col_end; ++j) {
+              printf("%*.8f    ", 10, float(tensor(i, j)));
+              // printf("%*d    ", 6, int(tensor(i, j)));
+            }
+            printf("\n");
+        }
+    }
+}
+
+// CUDA内核函数在设备端打印cutlass::half_t数组的所有值
+__global__ void printHalfArrayKernel(const cutlass::half_t* device_ptr, int dim1, int dim2) {
+    // 仅使用一个线程和一个块来打印数组的所有值
+    if (blockIdx.x == 0 && threadIdx.x == 0) {
+      printf("print_value_kernel_new\n");
+        for (int i = 0; i < dim1*dim2; ++i) {
+            float value = static_cast<float>(device_ptr[i]);
+            printf("%*f    ", 7, value);  // 打印浮点数
+        }
+    }
+}
+
+/// Helper to initialize a block of device data with custom initialization
+template <class Element>
+bool initialize_block_custom(
+  cutlass::DeviceAllocation<Element>& block,  // Device allocation block
+  int rows,                                   // Number of rows in the tensor
+  int cols,                                   // Number of columns in the tensor
+  int options=0,
+  cudaStream_t stream = nullptr // CUDA stream (optional)
+  ) 
+  {            
+  // 使用自定义的初始化函数来初始化张量数据块
+  cutlass::reference::device::TensorCustomInit(block.get(), block.size(), rows, cols, options);
+
+  return true;
+}
+
 /// Command line options parsing
 struct Options {
 
@@ -157,12 +266,14 @@ struct Options {
   int m, n, k, l, t;
   float alpha, beta;
   RasterOrderOptions raster;
+  int row_start, row_end, col_start, col_end; // New variables
 
   Options():
     help(false),
     error(false),
     m(2048), n(2048), k(2048), raster(RasterOrderOptions::AlongN), l(1), t(4096),
-    alpha(1.f), beta(0.f)
+    alpha(1.f), beta(0.f),
+    row_start(0), row_end(-1), col_start(0), col_end(-1)  // Initialize new variables
   { }
 
   // Parses the command line
@@ -196,6 +307,13 @@ struct Options {
     cmd.get_cmd_line_argument("l", l, 1);
     cmd.get_cmd_line_argument("alpha", alpha, 1.f);
     cmd.get_cmd_line_argument("beta", beta, 0.f);
+
+
+    // Parse new arguments
+    cmd.get_cmd_line_argument("row_start", row_start, 0);
+    cmd.get_cmd_line_argument("row_end", row_end, -1);
+    cmd.get_cmd_line_argument("col_start", col_start, 0);
+    cmd.get_cmd_line_argument("col_end", col_end, -1);
   }
 
   /// Prints the usage statement.
@@ -213,7 +331,11 @@ struct Options {
       << "  --t=<int>                   Sets the T extent  of the GEMM1, the width of GEMM1's weight\n"
       << "  --l=<int>                   Sets the L extent (batch count) of the GEMM\n"
       << "  --alpha=<f32>               Epilogue scalar alpha\n"
-      << "  --beta=<f32>                Epilogue scalar beta\n\n";
+      << "  --beta=<f32>                Epilogue scalar beta\n\n"
+      << "  --row_start=<int>           Sets the starting row for printing\n"
+      << "  --row_end=<int>             Sets the ending row for printing\n"
+      << "  --col_start=<int>           Sets the starting column for printing\n"
+      << "  --col_end=<int>             Sets the ending column for printing\n\n";
 
     return out;
   }
@@ -249,19 +371,22 @@ bool initialize_block(
   Element scope_max, scope_min;
   int bits_input = cutlass::sizeof_bits<Element>::value;
 
-  if (bits_input == 1) {
-    scope_max = 2;
-    scope_min = 0;
-  } else if (bits_input <= 8) {
-    scope_max = 2;
-    scope_min = -2;
-  } else {
-    scope_max = 8;
-    scope_min = -8;
-  }
+  // if (bits_input == 1) {
+  //   scope_max = 50;
+  //   scope_min = 0;
+  // } else if (bits_input <= 8) {
+  //   scope_max = 50;
+  //   scope_min = -50;
+  // } else {
+  //   scope_max = 50;
+  //   scope_min = -50;
+  // }
+
+    scope_max = 1;
+    scope_min = -1;
 
   cutlass::reference::device::BlockFillRandomUniform(
-    block.get(), block.size(), seed, scope_max, scope_min, 0);
+    block.get(), block.size(), seed, scope_max, scope_min, 8);
 
   return true;
 }
@@ -301,12 +426,19 @@ template <
 >
 struct ExampleRunner {
 
-  using LayoutA = cutlass::layout::RowMajor;
+  using LayoutA = cutlass::layout::ColumnMajor;
   using LayoutB = cutlass::layout::ColumnMajor;
   using LayoutC = cutlass::layout::ColumnMajor;
   using LayoutD = cutlass::layout::ColumnMajor;
   using Layout_gemm1_weight = cutlass::layout::ColumnMajor;
   using Layout_gemm1_output = cutlass::layout::ColumnMajor;
+
+  // using LayoutA = cutlass::layout::RowMajor;
+  // using LayoutB = cutlass::layout::RowMajor;
+  // using LayoutC = cutlass::layout::RowMajor;
+  // using LayoutD = cutlass::layout::RowMajor;
+  // using Layout_gemm1_weight = cutlass::layout::RowMajor;
+  // using Layout_gemm1_output = cutlass::layout::RowMajor;
 
   using ElementA = cutlass::half_t;
   using ElementB = cutlass::half_t;
@@ -340,7 +472,7 @@ struct ExampleRunner {
 
 
     using TileShape = Shape<_128,_256,_64>; // Threadblock-level tile size
-    using ClusterShape = Shape<_1, _2, _1>;
+    using ClusterShape = Shape<_1, _4, _1>;
 
 
 
@@ -445,7 +577,11 @@ struct ExampleRunner {
   // Methods
   //
 
-  bool verify(const ProblemShapeType& problem_size, float alpha, float beta) {
+  bool verify(const ProblemShapeType& problem_size, float alpha, float beta, 
+    int row_start, 
+    int row_end, 
+    int col_start, 
+    int col_end) {
     auto [M, N, K, L, T] = problem_size;
 
     cutlass::TensorRef ref_A(block_A.get(), Gemm::LayoutA::packed({M, K}));
@@ -481,6 +617,17 @@ struct ExampleRunner {
     // Check if output from CUTLASS kernel and reference kernel are equal or not
     bool passed = cutlass::reference::device::BlockCompareEqual(block_ref_D.get(), block_D.get(), block_D.size());
 
+
+    // 调用print_value_kernel_colMajor内核函数，传入对应的名称
+    print_value_kernel_colMajor<<<1, 1>>>(block_D.get(), M, N, 3, row_start, row_end, col_start, col_end);  // 使用1个block和1个thread 
+    // print_value_kernel_colMajor<<<1, 1>>>(block_ref_D.get(), M, N, 4, row_start, row_end, col_start, col_end);  // 使用1个block和1个thread
+    print_value_kernel_colMajor<<<1, 1>>>(block_B.get(), K, N, 2, row_start, row_end, col_start, col_end);  // 使用1个block和1个thread
+    print_value_kernel_colMajor<<<1, 1>>>(block_A.get(), M, K, 1, row_start, row_end, col_start, col_end);  // 使用1个block和1个thread
+
+
+    printHalfArrayKernel<<<1, 1>>>(block_A.get(), M, K);
+
+    // print_value_kernel_rowMajor<<<1, 1>>>(block_A.get(), M, K, row_start, row_end, col_start, col_end);  // 使用1个block和1个thread
     return passed;
   } // 不太必要改这里。只需要做两次verify即可
 
@@ -505,21 +652,28 @@ struct ExampleRunner {
     block_ref_D.reset(M * N * L);
     block_gemm1_weight.reset(N * T * L);
 
-    initialize_block(block_A, seed + 2023);
-    initialize_block(block_B, seed + 2022);
-    initialize_block(block_C, seed + 2021);
+    // initialize_block(block_A, seed + 2023);
+    // initialize_block(block_B, seed + 2022);
+    // initialize_block(block_C, seed + 2021);
     initialize_block(block_gemm1_weight, seed + 2020);
 
-    // // 初始化 block_A (M x K)
+    // 初始化 block_A (M x K)
     // initialize_block_fixed_value<ElementA, LayoutA>(block_A, ElementA(1.0f), M, K);
+    // initialize_block_custom<ElementA>(block_A, M, K, 2); // 这里的1意思是让一个block的行（仅考虑(128,256)的第一个block）切两半，上面是1，下面是2. 最后的option是2的意思是列主序---0902-1334
+
+    // initialize_block_custom<ElementA>(block_A, M, K, 3);
 
     // // 初始化 block_B (K x N)
-    // initialize_block_fixed_value<ElementB, LayoutB>(block_B, ElementB(1.0f), K, N);
+    // initialize_block_custom<ElementB>(block_B, K, N, 4);
 
     // // 初始化 block_C (M x N)
-    // initialize_block_fixed_value<ElementC, LayoutC>(block_C, ElementC(0.0f), M, N);
+    initialize_block_fixed_value<ElementC, LayoutC>(block_C, ElementC(0.0f), M, N);
     // initialize_block_fixed_value<Element_gemm1_weight, Layout_gemm1_weight>(block_gemm1_weight, Element_gemm1_weight(0.0f), N, T);
-    
+
+
+
+    initialize_block_custom<ElementB>(block_B, K, N, 0);
+    initialize_block_custom<ElementA>(block_A, M, K, 2);
   }
 
   bool run(const Options& options, const cutlass::KernelHardwareInfo& hw_info) {
@@ -597,7 +751,8 @@ struct ExampleRunner {
     }
 
     // Verify that the result is correct
-    bool passed = verify(problem_size, options.alpha, options.beta);
+    bool passed = verify(problem_size, options.alpha, options.beta, options.row_start, options.row_end, options.col_start, options.col_end);
+
     if (!passed) {
       std::cerr << "Reference check failed" << std::endl;
     }

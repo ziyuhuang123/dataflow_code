@@ -346,6 +346,211 @@ struct TensorFillRandomGaussianFunc {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+template <typename Element>
+__global__ void TensorCustomInitKernel(
+    Element *ptr,       ///< Pointer to device memory to be filled
+    int rows,           ///< Number of rows in the tensor
+    int cols            ///< Number of columns in the tensor
+) {
+    // Calculate the global index for this thread
+    size_t index = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // Calculate the total number of elements
+    size_t capacity = rows * cols;
+
+    // Make sure not to access out-of-bounds memory
+    if (index < capacity) {
+        int col = index / rows;  // Calculate row index---->注意这个写法是针对列主序的
+        int row = index % rows;  // Calculate column index  
+
+        // // Calculate width
+        // int width = (col > 0) ? static_cast<int>(log10f(static_cast<float>(col))) + 1 : 1;
+        // // Calculate value a + b * 10^(-width)
+        // float value = static_cast<float>(row) + static_cast<float>(col) * powf(10.0f, -width);
+
+        
+        // Store the value in the tensor
+        // ptr[index] = __float2half((static_cast<float>(col)) / 128.0);
+        ptr[index] = static_cast<Element>(col);
+    }
+}
+
+
+
+template <typename Element>
+__global__ void TensorCustomInitKernel_two(
+    Element *ptr,       ///< Pointer to device memory to be filled
+    int rows,           ///< Number of rows in the tensor
+    int cols            ///< Number of columns in the tensor
+) {
+    // Calculate the global index for this thread
+    size_t index = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // Calculate the total number of elements
+    size_t capacity = rows * cols;
+
+    // Make sure not to access out-of-bounds memory
+    if (index < capacity) {
+      if (index < cols*64) {
+          // Store the value in the tensor--->注意这个写法是针对rowMajor的
+          ptr[index] = static_cast<Element>(1);
+      }
+      else{
+        ptr[index] = static_cast<Element>(2);
+      }
+    }
+}
+
+template <typename Element>
+__global__ void TensorCustomInitKernel_three(
+    Element *ptr,       ///< Pointer to device memory to be filled
+    int rows,           ///< Number of rows in the tensor
+    int cols            ///< Number of columns in the tensor
+) {
+    // Calculate the global index for this thread
+    size_t index = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // Calculate the total number of elements
+    size_t capacity = rows * cols;
+
+    // Make sure not to access out-of-bounds memory
+    if (index < capacity) {
+      int col = index / rows;  // Calculate row index---->注意这个写法是针对列主序的
+      int row = index % rows;  // Calculate
+
+      if (row<128) {
+          ptr[index] = static_cast<Element>(row*0.1);
+      }
+      else{
+        ptr[index] = static_cast<Element>(1);
+      }
+
+      // if (row<64) {
+      //     ptr[index] = static_cast<Element>(1);
+      // }
+      // else{
+      //   ptr[index] = static_cast<Element>(2);
+      // }
+
+
+    }
+}
+
+template <typename Element>
+__global__ void TensorCustomInitKernel_four(
+    Element *ptr,       ///< Pointer to device memory to be filled
+    int rows,           ///< Number of rows in the tensor
+    int cols            ///< Number of columns in the tensor
+) {
+    // Calculate the global index for this thread
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // Calculate the total number of elements
+    int capacity = rows * cols;
+
+    // Make sure not to access out-of-bounds memory
+    if (index < capacity) {
+
+        int col = index / rows;  // Calculate row index---->注意这个写法是针对列主序的
+        int row = index % rows;  // Calculate column index 
+
+        if(row<128 && col<192){
+          // Calculate width
+          int width = (col > 0) ? static_cast<int>(log10f(static_cast<float>(col))) + 1 : 1;
+          // Calculate value a + b * 10^(-width)
+          float value = static_cast<float>(row) + static_cast<float>(col) * powf(10.0f, -width);
+          ptr[index] = __float2half(value);
+          // float value = row*256+col;
+          // float value = index;
+	
+
+          // Store the value in the tensor
+          // ptr[index] = __int2half_rz(index);
+        }
+        else{
+          ptr[index] = static_cast<Element>(0.1);
+        }
+    }
+}
+
+template <typename Element>
+__global__ void TensorCustomInitKernel_all_same(
+    Element *ptr,       ///< Pointer to device memory to be filled
+    int rows,           ///< Number of rows in the tensor
+    int cols            ///< Number of columns in the tensor
+) {
+    // Calculate the global index for this thread
+    size_t index = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // Calculate the total number of elements
+    size_t capacity = rows * cols;
+
+    // Make sure not to access out-of-bounds memory
+    if (index < capacity) {
+        // Store the value in the tensor
+        ptr[index] = static_cast<Element>(1);
+    }
+}
+
+
+template <typename Element>
+void TensorCustomInit(
+    Element *ptr,                   ///< Pointer to device memory to be filled
+    size_t capacity,                ///< Number of elements in the tensor (total elements, not just rows * cols)
+    int rows,                       ///< Number of rows in the tensor
+    int cols,                       ///< Number of columns in the tensor
+    int option = 0, // 选择哪一个初始化具体方法
+    cudaStream_t stream = nullptr   ///< CUDA stream (optional)
+) {
+    // Define block and grid sizes
+    int block_size = 256;  // Number of threads per block
+    int grid_size = (capacity + block_size - 1) / block_size;  // Number of blocks
+
+    if(option==0){
+      // Launch the kernel
+      TensorCustomInitKernel<Element><<<grid_size, block_size, 0, stream>>>(ptr, rows, cols);
+    }
+    else if(option==1){
+      TensorCustomInitKernel_two<Element><<<grid_size, block_size, 0, stream>>>(ptr, rows, cols);
+    }
+    else if(option==2){
+      TensorCustomInitKernel_three<Element><<<grid_size, block_size, 0, stream>>>(ptr, rows, cols);
+    }
+    else if(option==3){
+      TensorCustomInitKernel_four<Element><<<grid_size, block_size, 0, stream>>>(ptr, rows, cols);
+    }
+    else if(option==4){
+      TensorCustomInitKernel_all_same<Element><<<grid_size, block_size, 0, stream>>>(ptr, rows, cols);
+    }
+
+
+    // Synchronize the stream if a non-default stream is used
+    if (stream == nullptr) {
+        cudaDeviceSynchronize();
+    } else {
+        cudaStreamSynchronize(stream);
+    }
+}  // ptr是GPU上的。注意必须写kernel来初始化！直接在CPU上是无法访问到的！
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /// Fills a tensor with random values with a Gaussian distribution.
 template <
   typename Element,               ///< Element type

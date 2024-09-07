@@ -159,47 +159,48 @@ print(char const* format) {
 template <class T>
 CUTE_HOST_DEVICE void
 pretty_print(T const& v) {
-  printf("  "); print(v);
+  printf("    ");  // 增加了更多的空格
+  print(v);
 }
 
 CUTE_HOST_DEVICE void
 pretty_print(bool const& v) {
-  printf("%*d", 3, int(v));
+  printf("%*d", 5, int(v));  // 增加字段宽度为5
 }
 
 CUTE_HOST_DEVICE void
 pretty_print(int32_t const& v) {
-  printf("%*d", 5, v);
+  printf("%*d", 7, v);  // 增加字段宽度为7
 }
 
 CUTE_HOST_DEVICE void
 pretty_print(uint32_t const& v) {
-  printf("%*d", 5, v);
+  printf("%*d", 7, v);  // 增加字段宽度为7
 }
 
 CUTE_HOST_DEVICE void
 pretty_print(int64_t const& v) {
-  printf("%*lld", 5, static_cast<long long>(v));
+  printf("%*lld", 8, static_cast<long long>(v));  // 增加字段宽度为8
 }
 
 CUTE_HOST_DEVICE void
 pretty_print(uint64_t const& v) {
-  printf("%*llu", 5, static_cast<unsigned long long>(v));
+  printf("%*llu", 8, static_cast<unsigned long long>(v));  // 增加字段宽度为8
 }
 
 CUTE_HOST_DEVICE void
 pretty_print(half_t const& v) {
-  printf("%*.2f", 8, float(v));
+  printf("%*.2f", 10, float(v));  // 增加字段宽度为10
 }
 
 CUTE_HOST_DEVICE void
 pretty_print(float const& v) {
-  printf("%*.2e", 10, v);
+  printf("%*.2e", 12, v);  // 增加字段宽度为12
 }
 
 CUTE_HOST_DEVICE void
 pretty_print(double const& v) {
-  printf("%*.3e", 11, v);
+  printf("%*.3e", 14, v);  // 增加字段宽度为14
 }
 
 } // end namespace cute

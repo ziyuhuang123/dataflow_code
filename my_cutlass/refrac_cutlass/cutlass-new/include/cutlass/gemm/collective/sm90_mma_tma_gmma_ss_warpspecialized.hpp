@@ -411,7 +411,7 @@ struct CollectiveMma<
 
       Tensor tBgB = block_tma_b.partition_S(gB);                                                 // (TMA,TMA_N,TMA_K,k)
       Tensor tBsB = block_tma_b.partition_D(sB);                                              // (TMA,TMA_N,TMA_K,PIPE)
-
+      
       uint16_t mcast_mask_a = 0;
       uint16_t mcast_mask_b = 0;
 
@@ -431,6 +431,8 @@ struct CollectiveMma<
         }
       }
 
+
+      // k_tile_count = 1;  
       // Mainloop
       CUTLASS_PRAGMA_NO_UNROLL
       for ( ; k_tile_count > 0; --k_tile_count) {
@@ -452,6 +454,47 @@ struct CollectiveMma<
         // Advance smem_pipe_write
         ++smem_pipe_write;
       }
+
+
+
+      // if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==0&&threadIdx.y==0){
+      //   print(tAsA); // 如果A是colMajor: ((64, 64), 2), 1, 1, 3), 如果A是rowMajor: ((64, 128), 1), 1, 1, 3)
+      //   printf("    tAsA\n");
+
+        
+      //   // 打印指定范围的张量
+      //   for (int i = 0; i < 128*64*3; ++i) {
+      //     printf("%*.8f    ", 10, float(tAsA(i)));
+      //   }
+      //   printf("\n");
+
+      //   auto slice_0 = tAsA(make_coord(make_coord(make_coord(X{}, X{}), X{}), X{}, X{}, Int<0>{}));
+      //   print(slice_0);
+
+      //   // auto slice_0 = tAsA(make_coord(make_coord(X{}, X{}), X{}, X{}, X{}, Int<0>{}));
+      //   // auto slice_1 = tAsA(make_coord(make_coord(X{}, X{}), X{}, X{}, X{}, Int<1>{}));
+      //   // auto slice_2 = tAsA(make_coord(make_coord(X{}, X{}), X{}, X{}, X{}, Int<2>{}));
+      //   // // 打印切片数据，使用tensor(i, j, ...)的方式
+      //   printf("\n切片 0 数据-张量形式：\n");
+      //   for (int i = 0; i < 64; ++i) {  // 第一个维度
+      //       for (int j = 0; j < 64; ++j) {  // 第二个维度
+      //           for (int k = 0; k < 2; ++k) {  // 第三个维度
+      //               printf("%*.8f ", 10, float(slice_0(i, j, k, 0, 0)));
+      //           }
+      //           printf("\n");
+      //       }
+      //       printf("\n");
+      //   }
+      //   printf("\n切片 0 数据-指针形式：\n");
+      //   // 打印指定范围的张量
+      //   for (int i = 0; i < 128*64; ++i) {
+      //     printf("%*.8f    ", 10, float(tAsA(i)));
+      //   }
+      //   printf("\n");
+
+      // } // 之前很多0，，，，因为放错了位置。当然打印应该放在load读取的最后位置。
+
+
     }
   }
 
@@ -666,6 +709,51 @@ struct CollectiveMma<
       int read_stage = smem_pipe_read.index();
       warpgroup_arrive();
       tiled_mma.accumulate_ = GMMA::ScaleOut::Zero;
+
+
+
+
+      if(blockIdx.x==0&&blockIdx.y==0&&threadIdx.x==383&&threadIdx.y==0){
+        auto layout = SmemLayoutA{};  // 创建一个SmemLayoutA的实例  SmemLayoutAtomA
+        print(layout);
+        printf("    SmemLayoutA{}\n");
+        auto layout1 = SmemLayoutAtomA{};  // 创建一个SmemLayoutA的实例  SmemLayoutAtomA
+        print(layout1);
+        printf("    SmemLayoutAtomA{}\n");
+        print(tCrA);
+        printf("    tCrA\n");
+        print(tCsA);
+        printf("    tCsA\n");
+        print_tensor(tCsA);
+        print(sA);
+        printf("    sA\n");
+        printf("    sA-value\n");
+        for (int i = 0; i < 128*64*3; ++i) {
+          printf("%*d    ", 6, int(sA(i)));
+        }  
+        printf("\n");
+        printf("    sA-value-by-tensor\n");
+        print_tensor(sA);
+        // for (int k = 0; k < 3; ++k) {  // 第三维度，长度为 3
+        //     for (int j = 0; j < 64; ++j) {  // 第二维度，长度为 64
+        //         for (int i1 = 0; i1 < 64; ++i1) {  // 第一维度，长度为 64
+        //             for (int i2 = 0; i2 < 2; ++i2) {  // 第一维度内部的第二个维度，长度为 2
+        //                 printf("%*d    ", 6, int(sA(make_coord(make_coord(i1, i2), j, k))));
+        //             }
+        //             printf("\n");
+        //         }
+        //         printf("\n");
+        //     }
+        //     printf("\n");
+        // }
+      }
+
+
+
+
+
+
+
       // Unroll the K mode manually to set scale D to 1
       CUTLASS_PRAGMA_UNROLL
       for (int k_block = 0; k_block < size<2>(tCrA); ++k_block) {
@@ -716,6 +804,8 @@ struct CollectiveMma<
     //   printf("enter pipeline 427, k_tile_count=%d, prologue_mma_count=%d, size<2>(tCrA)=%d\n", k_tile_count, prologue_mma_count, aa);
     // }
 
+
+// -----------------0905-1555注释了这里，为了producer-consumer都注释掉k_tile
 
     CUTLASS_PRAGMA_NO_UNROLL
     for ( ; k_tile_count > 0; --k_tile_count)

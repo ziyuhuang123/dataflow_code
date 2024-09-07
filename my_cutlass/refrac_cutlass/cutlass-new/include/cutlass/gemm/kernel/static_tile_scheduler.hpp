@@ -195,7 +195,18 @@ public:
     //   return WorkTileInfo::invalid_work_tile();
     // }  // 原先的代码
 
-    if(linear_idx>uint64_t(cute::block_id_in_cluster().y) + uint64_t(cute::cluster_id_in_grid().y+1) * uint64_t(scheduler_params.problem_block_number.y)){
+    if(linear_idx>=uint64_t(cute::block_id_in_cluster().y) + uint64_t(cute::cluster_id_in_grid().y+1) * uint64_t(scheduler_params.problem_block_number.y)){
+// 这里当然是要>=而不能是>，因为比如一行有8*256=2048，那么等于8的时候就已经是第二行了。如果是>就会多出一次执行。
+      // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 383 && threadIdx.y == 0) {
+      //     uint64_t block_id_y = uint64_t(cute::block_id_in_cluster().y);
+      //     uint64_t cluster_id_y = uint64_t(cute::cluster_id_in_grid().y + 1);
+      //     uint64_t problem_block_number_y = uint64_t(scheduler_params.problem_block_number.y);
+
+      //     uint64_t result = block_id_y + cluster_id_y * problem_block_number_y;
+
+      //     printf("block_id_in_cluster_y: %lu, cluster_id_in_grid_y: %lu, problem_block_number_y: %lu, result: %lu\n", 
+      //           block_id_y, cluster_id_y, problem_block_number_y, result);
+      // }
       return WorkTileInfo::invalid_work_tile();
     }  
 
