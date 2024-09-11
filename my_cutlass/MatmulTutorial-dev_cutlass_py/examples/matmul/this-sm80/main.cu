@@ -9,7 +9,7 @@
 
 int STAGES = 1;
 int MULTI_THREADING = 1;
-int ITERS = 20;
+int ITERS = 1;
 
 extern __global__ void matmul(half *A, half *B, half *C, int M, int N, int K, float alpha, float beta);
 
@@ -96,13 +96,13 @@ int main(int argc, char *argv[])
     {
         for (int j = 0; j < K; ++j)
         {
-            // hA[i * K + j] = (half)(rand() % 1000 * 1 / 100 % 10 + 0.0);
-            hA[i * K + j] = (half)((i*K+j)*1e-3);
+            hA[i * K + j] = (half)(rand() % 1000 * 1 / 100 % 10 + 0.0);
+            // hA[i * K + j] = (half)((i*K+j));
         }
         for (int j = 0; j < N; ++j)
         {
-            hC[i * N + j] = (float)(0);
-            golden[i * N + j] = (float)(0);
+            hC[i * N + j] = (float)(1);
+            golden[i * N + j] = (float)(2);
         }
     }
 
@@ -110,9 +110,9 @@ int main(int argc, char *argv[])
     {
         for (int n = 0; n < N; ++n)
         {
-            // hB[n * K + k] = (half)(rand() % 1000 * 1 / 100 % 10 + 0.0);
+            hB[n * K + k] = (half)(rand() % 1000 * 1 / 100 % 10 + 0.0);
             // hB[n * K + k] = (half)((n * K + k)*1e-3);
-            hB[n * K + k] = (half)(1);
+            // hB[n * K + k] = (half)(1);
         }
     }
 
@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
     dim3 dimGrid(N / 128, M / 128);
 
 #ifndef DEBUG
-    int smem_size = MAX(STAGES * 128 * 32 * 2 * 2, 128 * 128 * 4);
+    int smem_size = MAX(STAGES * 128 * 32 * 2 * 2, 128 * 128 * 4+128*32*2);// 这里增加了GEMM1的权重的空间
     if (smem_size >= (48 << 10))
     {
         CUDA_CHECK(cudaFuncSetAttribute(matmul,
@@ -280,6 +280,16 @@ int main(int argc, char *argv[])
         for (int j = 0; j < N; ++j)
         {
             std::cout << (float)hC[i * N + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    std::cout << "MatrixA:" << std::endl;
+    for (int i = 0; i < M; ++i)
+    {
+        for (int j = 0; j < K; ++j)
+        {
+            std::cout << (float)hA[i * K + j] << " ";
         }
         std::cout << std::endl;
     }

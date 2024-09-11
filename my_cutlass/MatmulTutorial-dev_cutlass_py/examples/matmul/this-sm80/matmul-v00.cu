@@ -70,7 +70,24 @@ __device__ void loadSmemC(float *smem, half *C, int M, int N)
     }
 }
 
-__device__ void storeSmemC(half *C, float *smem, int M, int N)
+// __device__ void storeSmemC(half *C, float *smem, int M, int N)
+// {
+//     // load 128 * 128
+//     int bx = blockIdx.x;
+//     int by = blockIdx.y;
+//     int tx = threadIdx.x;
+//     int ty = threadIdx.y;
+//     int tz = threadIdx.z;
+//     int tid = tz * 64 + ty * 32 + tx;
+//     for (int i = 0; i < 128; ++i)
+//     {
+//         int row = i;
+//         int col = tid;
+//         // layout: [row_out, col_out, row_in, col_in] = [8, 8, 16, 16]
+//         (C[(by * 128 + row) * N + bx * 128 + col]) = (half)smem[row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16];
+//     }
+// }
+__device__ void storeSmemC(half *C, half *smem, int M, int N)
 {
     // load 128 * 128
     int bx = blockIdx.x;
@@ -84,7 +101,7 @@ __device__ void storeSmemC(half *C, float *smem, int M, int N)
         int row = i;
         int col = tid;
         // layout: [row_out, col_out, row_in, col_in] = [8, 8, 16, 16]
-        (C[(by * 128 + row) * N + bx * 128 + col]) = (half)smem[row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16];
+        (C[(by * 128 + row) * N + bx * 128 + col]) = smem[row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16];
     }
 }
 
@@ -112,7 +129,23 @@ __device__ void loadFragB(nvcuda::wmma::fragment<nvcuda::wmma::matrix_b, wmmaM, 
     }
 }
 
-__device__ void storeAccum(float *ptr, nvcuda::wmma::fragment<nvcuda::wmma::accumulator, wmmaM, wmmaN, wmmaK, float> *frag)
+// __device__ void storeAccum(float *ptr, nvcuda::wmma::fragment<nvcuda::wmma::accumulator, wmmaM, wmmaN, wmmaK, float> *frag)
+// {
+//     // store 64x64
+//     int ty = threadIdx.y;
+//     int tz = threadIdx.z;
+//     for (int i = 0; i < 4; ++i)
+//     {
+//         for (int j = 0; j < 4; ++j)
+//         {
+//             int row = tz * 64 + i * 16;
+//             int col = ty * 64 + j * 16;
+//             // laoyut: [8, 8, 16, 16]
+//             nvcuda::wmma::store_matrix_sync(ptr + row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16), frag[i * 4 + j], 16, nvcuda::wmma::mem_row_major);
+//         }
+//     }
+// }
+__device__ void storeAccum(half *ptr, nvcuda::wmma::fragment<nvcuda::wmma::accumulator, wmmaM, wmmaN, wmmaK, half> *frag)
 {
     // store 64x64
     int ty = threadIdx.y;
@@ -139,11 +172,13 @@ __global__ void matmul(half *A, half *B, half *C, int M, int N, int K, float alp
     extern __shared__ uint8_t shared_storage[];
     half *SA = reinterpret_cast<half *>(shared_storage);
     half *SB = reinterpret_cast<half *>(shared_storage + MI * KI * sizeof(half));
-    float *SC = reinterpret_cast<float *>(shared_storage);
+    // float *SC = reinterpret_cast<float *>(shared_storage);
+    half *SC = reinterpret_cast<half *>(shared_storage);
 
     nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, wmmaM, wmmaN, wmmaK, half, nvcuda::wmma::row_major> FragA[MII / wmmaM];
     nvcuda::wmma::fragment<nvcuda::wmma::matrix_b, wmmaM, wmmaN, wmmaK, half, nvcuda::wmma::col_major> FragB[NII / wmmaN];
-    nvcuda::wmma::fragment<nvcuda::wmma::accumulator, wmmaM, wmmaN, wmmaK, float> Accum[MII / wmmaM * NII / wmmaN];
+    // nvcuda::wmma::fragment<nvcuda::wmma::accumulator, wmmaM, wmmaN, wmmaK, float> Accum[MII / wmmaM * NII / wmmaN];
+    nvcuda::wmma::fragment<nvcuda::wmma::accumulator, wmmaM, wmmaN, wmmaK, half> Accum[MII / wmmaM * NII / wmmaN];
 
     for (int mii = 0; mii < MII / wmmaM; mii += 1)
     {
