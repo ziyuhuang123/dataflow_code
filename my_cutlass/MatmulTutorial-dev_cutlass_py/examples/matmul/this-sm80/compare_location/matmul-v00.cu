@@ -102,14 +102,14 @@ __device__ void loadFragA(nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, wmmaM, 
 } // 我就需要改这里的loadFrag。原先是从连续的smem位置去取。现在我们从一些离散的位置去取值。
 
 
-__device__ void loadFragA_new(nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, wmmaM, wmmaN, wmmaK, half, nvcuda::wmma::row_major> *frag, half *smem, int ki)
-{
+__device__ void loadFragA_new(nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, wmmaM, wmmaN, wmmaK, half, nvcuda::wmma::row_major> *frag, half *smem, int col)
+{ // 这里和之前不一样，直接传入col值
     // load 64x16
     int tz = threadIdx.z;
     for (int i = 0; i < 4; ++i)
     {
         int row = tz * 64 + i * 16;
-        int col = ki * KII; // KII=16
+        // int col = ki * KII; // KII=16
         // nvcuda::wmma::load_matrix_sync(frag[i], smem + row / 16 * (2 * 16 * 16) + col / 16 * (16 * 16), 16);
         nvcuda::wmma::load_matrix_sync(frag[i], smem + row / 16 * (128 * 16)  // 这里之前是32，现在改成128是因为C的一列宽度是128
         + col / 16 * (16 * 16), 16); // 这里的row和col都是C矩阵意义上的位置，而要加到smem指针上，则要考虑真实的步长，比如col这里，增加一个16*16的col向右，从C来看只需要加16即可，但是smem是走完左侧的16*16之后，才能到右侧的col位置上。不过这一点对C_smem是不变的。不过在调用loadFragA_new的地方需要相应修改传入的ki。

@@ -11,7 +11,10 @@ int STAGES = 1;
 int MULTI_THREADING = 1;
 int ITERS = 1;
 
-extern __global__ void matmul(half *A, half *B, half *C, int M, int N, int K, float alpha, float beta);
+// extern __global__ void matmul(half *A, half *B, half *C, int M, int N, int K, float alpha, float beta);
+extern __global__ void matmul(half *A, half *B, half *gemm1_result, half *gemm1_weight, int M, int N, int K, int T, float alpha, float beta);
+
+
 
 // #define DEBUG
 // #define PRINT
@@ -24,10 +27,12 @@ extern __global__ void matmul(half *A, half *B, half *C, int M, int N, int K, fl
 const int M = 128;
 const int N = 128;
 const int K = 128;
+const int T = 256;
 #else
 const int M = 5376;
 const int N = 5376;
 const int K = 2048;
+const int T = 128;
 
 // const int M = 256;
 // const int N = 256;
@@ -82,7 +87,7 @@ int main(int argc, char *argv[])
         }
     }
 #ifdef DEBUG
-    std::cout << "Debugging using shape M=" << M << ", N=" << N << ", K=" << K << "\n";
+    std::cout << "Debugging using shape M=" << M << ", N=" << N << ", K=" << K << ", T=" << T << "\n";
 #else
     std::cout << "Test performance using shape M=" << M << ", N=" << N << ", K=" << K << "\n";
 #endif
@@ -90,7 +95,10 @@ int main(int argc, char *argv[])
     half *hA = (half *)malloc(M * K * 2);
     half *hB = (half *)malloc(K * N * 2);
     half *hC = (half *)malloc(M * N * 2);
+    half *h_gemm1_result = (half *)malloc(M * T * 2);
+    half *h_gemm1_weight = (half *)malloc(N * T * 2);
     half *golden = (half *)malloc(M * N * 2);
+    half *golden1 = (half *)malloc(M * T * 2);
 
     for (int i = 0; i < M; ++i)
     {
@@ -101,8 +109,13 @@ int main(int argc, char *argv[])
         }
         for (int j = 0; j < N; ++j)
         {
-            hC[i * N + j] = (float)(1);
-            golden[i * N + j] = (float)(2);
+            hC[i * N + j] = (float)(0);
+            golden[i * N + j] = (float)(0);
+        }
+        for (int j = 0; j < T; ++j)
+        {
+            h_gemm1_result[i * T + j] = (float)(0);
+            golden1[i * T + j] = (float)(0);
         }
     }
 
@@ -113,8 +126,18 @@ int main(int argc, char *argv[])
             hB[n * K + k] = (half)(rand() % 1000 * 1 / 100 % 10 + 0.0);
             // hB[n * K + k] = (half)((n * K + k)*1e-3);
             // hB[n * K + k] = (half)(1);
-        }
+        } // K*N
     }
+
+
+    for (int n = 0; n < N; ++n)
+    {
+        for (int t = 0; t < T; ++t)
+        {
+            h_gemm1_weight[t * N + n] = (half)(rand() % 1000 * 1 / 100 % 10 + 0.0); 
+        } // N*T
+    }
+
 
 #ifdef DEBUG
     std::cout << "Computing golden values...\n";
@@ -152,25 +175,70 @@ int main(int argc, char *argv[])
         }
     }
     std::cout << "Golden values done!\n";
+
+
+
+#pragma omp parallel for
+    for (int i = 0; i < M; i += 64)
+    {
+#pragma omp parallel for
+        for (int j = 0; j < T; j += 64)
+        { // 新的MNK对应的就是MTN
+            float accum1[64 * 64] = {0};
+            for (int k = 0; k < N; k += 32)
+            {
+                for (int kk = 0; kk < 32; ++kk)
+                {
+                    for (int jj = 0; jj < 64; ++jj)
+                    {
+                        for (int ii = 0; ii < 64; ++ii)
+                        {
+                            accum1[ii * 64 + jj] += ((float)golden[(i + ii) * N + k + kk] * (float)h_gemm1_weight[(j + jj) * N + k + kk]);
+                        }
+                    }
+                }
+            }
+            for (int ii = 0; ii < 64; ++ii)
+            {
+                for (int jj = 0; jj < 64; ++jj)
+                {
+                    for (int kk = 0; kk < 64; ++kk)
+                    {
+                        golden1[(i + ii) * T + j + jj] = (half)accum1[ii * 64 + jj];
+                    }
+                }
+            }
+        }
+    }
+    std::cout << "Golden111 values done!\n";
+
+
 #endif
 
     half *dA;
     half *dB;
     half *dC;
+    half *d_gemm1_weight;
+    half *d_gemm1_result;
 
     CUDA_CHECK(cudaMalloc(&dA, M * K * 2));
     CUDA_CHECK(cudaMalloc(&dB, K * N * 2));
     CUDA_CHECK(cudaMalloc(&dC, M * N * 2));
+    CUDA_CHECK(cudaMalloc(&d_gemm1_weight, N * T * 2));
+    CUDA_CHECK(cudaMalloc(&d_gemm1_result, M * T * 2));
 
     CUDA_CHECK(cudaMemcpy(dA, hA, M * K * 2, cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(dB, hB, K * N * 2, cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(dC, hC, M * N * 2, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_gemm1_weight, h_gemm1_weight, T * N * 2, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_gemm1_result, h_gemm1_result, M * N * 2, cudaMemcpyHostToDevice));
 
     dim3 dimBlock(32, 2 * MULTI_THREADING, 2);
-    dim3 dimGrid(N / 128, M / 128);
+    // dim3 dimGrid(N / 128, M / 128);
+    dim3 dimGrid(1, M / 128); // 增加这个是因为T维度上只需要一个block
 
 #ifndef DEBUG
-    int smem_size = MAX(STAGES * 128 * 32 * 2 * 2, 128 * 128 * 4+128*32*2);// 这里增加了GEMM1的权重的空间
+    int smem_size = MAX(STAGES * 128 * 32 * 2 * 2, 128 * 128 * 2+128*32*2+128 * 128 * 2);// 这里增加了GEMM1的权重的空间
     if (smem_size >= (48 << 10))
     {
         CUDA_CHECK(cudaFuncSetAttribute(matmul,
@@ -179,12 +247,14 @@ int main(int argc, char *argv[])
     }
 
 
+// __global__ void matmul(half *A, half *B, half *gemm1_result, half *gemm1_weight, int M, int N, int K, int T, float alpha, float beta)
+
 
   dim3 cluster(1, 2, 1);
     void* kernel_params[] = {
-        (void*)&dA, (void*)&dB, (void*)&dC,  // half* 型指针的地址
-        (void*)&M, (void*)&N, (void*)&K,     // int 型变量的地址
-        (void*)&alpha, (void*)&beta          // float 型变量的地址
+        (void*)&dA, (void*)&dB, (void*)&d_gemm1_result, (void*)&d_gemm1_weight,
+        (void*)&M, (void*)&N, (void*)&K, (void*)&T,
+        (void*)&alpha, (void*)&beta
     };
   cudaLaunchConfig_t launch_config;
   launch_config.gridDim = dimGrid;
@@ -249,7 +319,25 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef DEBUG
-    int smem_size = MAX(STAGES * 128 * 32 * 2 * 2, 128 * 128 * 4);
+    // int smem_size = MAX(STAGES * 128 * 32 * 2 * 2, 128 * 128 * 4);
+    // std::cout << "Using shared memory = " << (double)smem_size / 1e3 << " KB.\n";
+    // if (smem_size >= (48 << 10))
+    // {
+    //     CUDA_CHECK(cudaFuncSetAttribute(matmul,
+    //                                     cudaFuncAttributeMaxDynamicSharedMemorySize,
+    //                                     smem_size));
+    // }
+    // std::cout << "Computing result values...\n";
+    // matmul<<<dimGrid, dimBlock, smem_size, nullptr>>>(dA, dB, dC, M, N, K, alpha, beta);
+    // CUDA_CHECK(cudaGetLastError());
+    // std::cout << "Computing results done!\n";
+    // CUDA_CHECK(cudaMemcpy(hC, dC, M * N * 2, cudaMemcpyDeviceToHost));
+
+
+
+
+
+    int smem_size = MAX(STAGES * 128 * 32 * 2 * 2, 128 * 128 * 2+128*32*2);// 这里增加了GEMM1的权重的空间
     std::cout << "Using shared memory = " << (double)smem_size / 1e3 << " KB.\n";
     if (smem_size >= (48 << 10))
     {
@@ -258,10 +346,40 @@ int main(int argc, char *argv[])
                                         smem_size));
     }
     std::cout << "Computing result values...\n";
-    matmul<<<dimGrid, dimBlock, smem_size, nullptr>>>(dA, dB, dC, M, N, K, alpha, beta);
+    // matmul<<<dimGrid, dimBlock, smem_size, nullptr>>>(dA, dB, dC, M, N, K, alpha, beta);
+
+  dim3 cluster(1, 2, 1);
+    void* kernel_params[] = {
+        (void*)&dA, (void*)&dB, (void*)&d_gemm1_result, (void*)&d_gemm1_weight,
+        (void*)&M, (void*)&N, (void*)&K, (void*)&T,
+        (void*)&alpha, (void*)&beta
+    };
+  cudaLaunchConfig_t launch_config;
+  launch_config.gridDim = dimGrid;
+  launch_config.blockDim = dimBlock;
+  launch_config.dynamicSmemBytes = smem_size;
+  launch_config.stream = nullptr;
+
+  cudaLaunchAttribute launch_attribute[1];
+  launch_attribute[0].id = cudaLaunchAttributeClusterDimension;
+  launch_attribute[0].val.clusterDim.x = cluster.x;
+  launch_attribute[0].val.clusterDim.y = cluster.y;
+  launch_attribute[0].val.clusterDim.z = cluster.z;
+
+  launch_config.attrs = launch_attribute;
+  launch_config.numAttrs = 1;
+  void const* Matmul = (void const*)matmul;
+  cudaError_t status = cudaFuncSetAttribute(
+      Matmul, cudaFuncAttributeNonPortableClusterSizeAllowed, 1);
+  CUDA_CHECK(status);
+
     CUDA_CHECK(cudaGetLastError());
     std::cout << "Computing results done!\n";
-    CUDA_CHECK(cudaMemcpy(hC, dC, M * N * 2, cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_gemm1_result, d_gemm1_result, M * T * 2, cudaMemcpyDeviceToHost));
+
+
+
+
 
 #ifdef PRINT
     std::cout << "Golden:" << std::endl;
@@ -300,12 +418,12 @@ int main(int argc, char *argv[])
     {
         for (int j = 0; j < N; ++j)
         {
-            float diff = ((float)golden[i * N + j] - (float)hC[i * N + j]);
+            float diff = ((float)golden1[i * N + j] - (float)h_gemm1_result[i * N + j]);
             if (diff < 0)
             {
                 diff = -diff;
             }
-            float maxv = MAX((float)golden[i * N + j], (float)hC[i * N + j]);
+            float maxv = MAX((float)golden1[i * N + j], (float)h_gemm1_result[i * N + j]);
             if (maxv < 0)
             {
                 maxv = -maxv;
