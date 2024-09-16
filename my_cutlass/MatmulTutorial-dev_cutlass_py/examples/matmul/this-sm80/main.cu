@@ -238,7 +238,7 @@ int main(int argc, char *argv[])
     dim3 dimGrid(1, M / 128); // 增加这个是因为T维度上只需要一个block
 
 #ifndef DEBUG
-    int smem_size = MAX(STAGES * 128 * 32 * 2 * 2, 128 * 128 * 2+128*32*2+128 * 128 * 2);// 这里增加了GEMM1的权重的空间
+    int smem_size = MAX(STAGES * 128 * 32 * 2 * 2, 128 * 128 * 2+128 * 128 * 2);// 需要同时存GEMM0的结果和GEMM1的结果。读GEMM1的SMEM也许不需要那么大，以后可以reuse。
     if (smem_size >= (48 << 10))
     {
         CUDA_CHECK(cudaFuncSetAttribute(matmul,

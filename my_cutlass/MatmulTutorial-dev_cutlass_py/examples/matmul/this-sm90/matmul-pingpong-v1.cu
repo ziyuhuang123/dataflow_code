@@ -11,7 +11,7 @@ static constexpr int WG_NUMBER = 3;
 static constexpr int BLOCKM = 128;
 static constexpr int BLOCKN = 128;
 static constexpr int BLOCKK = 64;
-static constexpr int STAGES = 5; // 实践证实这里可以调整整个的SMEM空间
+static constexpr int STAGES = 5; // 实践证实这里可以调整整个的SMEM空间-原先是7哦
 #define DEBUG 1
 #ifdef DEBUG
 #define PRINT_BT(BX, BY, TX, ...)                                    \
@@ -331,6 +331,15 @@ DEVICE void cp_async(void* ptr, const T* gmem_ptr) {
                    smem_ptr),
                "l"(gmem_ptr), "n"(16), "r"(16));
 }
+
+
+
+
+// static constexpr int BLOCKM = 128;
+// static constexpr int BLOCKN = 128;
+// static constexpr int BLOCKK = 64;
+
+
 
 // GMMA 64x128x16 F32+=F16*F16
 template <int ScaleA, int ScaleB, int ScaleD, int TransA, int TransB>

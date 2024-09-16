@@ -1,0 +1,9 @@
+Setting to 1 stages.
+Debugging using shape M=128, N=128, K=128, T=256
+Computing golden values...
+Golden values done!
+Golden111 values done!
+Using shared memory = 40.96 KB.
+Computing result values...
+Computing results done!
+Correctness Check Passed!

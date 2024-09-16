@@ -4,6 +4,8 @@
 // Running cost of CUDA kernel is 4.46636ms
 // TFLOPS: 26.5048
 
+// nvcc -arch=sm_90  -DDEBUG -Xcompiler -fopenmp matmul-v00.cu main.cu -o test && ./test stages 1 > result.txt 2>&1
+
 #include <cuda_fp16.h>
 #include <mma.h>
 #include <cuda.h>
@@ -74,6 +76,24 @@ __device__ void loadSmemB_new(half *smem, half *B, int N, int K, int ko, int bx_
 
 
 
+// __device__ void loadSmemC(float *smem, half *C, int M, int N)
+// {
+//     // load 128 * 128
+//     int bx = blockIdx.x;
+//     int by = blockIdx.y;
+//     int tx = threadIdx.x;
+//     int ty = threadIdx.y;
+//     int tz = threadIdx.z;
+//     int tid = tz * 64 + ty * 32 + tx;
+//     for (int i = 0; i < 128; ++i)
+//     {
+//         int row = i;
+//         int col = tid;
+//         // layout: [row_out, col_out, row_in, col_in] = [8, 8, 16, 16]
+//         smem[row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16] = (float)(C[(by * 128 + row) * N + bx * 128 + col]);
+//     }
+// }
+
 __device__ void loadSmemC(float *smem, half *C, int M, int N)
 {
     // load 128 * 128
@@ -88,9 +108,11 @@ __device__ void loadSmemC(float *smem, half *C, int M, int N)
         int row = i;
         int col = tid;
         // layout: [row_out, col_out, row_in, col_in] = [8, 8, 16, 16]
-        smem[row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16] = (float)(C[(by * 128 + row) * N + bx * 128 + col]);
+        smem[row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16] = (half)(C[(by * 128 + row) * N + bx * 128 + col]);
     }
 }
+
+
 
 // __device__ void storeSmemC(half *C, float *smem, int M, int N)
 // {
