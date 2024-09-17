@@ -4,12 +4,12 @@
 // Running cost of CUDA kernel is 4.46636ms
 // TFLOPS: 26.5048
 
-// nvcc -arch=sm_90  -DDEBUG -Xcompiler -fopenmp matmul-v00.cu main.cu -o test && ./test stages 1 > result.txt 2>&1
+// nvcc -arch=sm_90  -DDEBUG -DPRINT -Xcompiler -fopenmp matmul-v00.cu main.cu -o test && ./test stages 1 > result.txt 2>&1
 
 #include <cuda_fp16.h>
 #include <mma.h>
 #include <cuda.h>
-
+#include <stdio.h>
 const int MI = 128;
 const int NI = 128;
 const int KI = 32;
@@ -19,6 +19,8 @@ const int KII = 16;
 const int wmmaM = 16;
 const int wmmaN = 16;
 const int wmmaK = 16;
+#define C_LAYOUT nvcuda::wmma::mem_row_major
+
 
 __device__ void loadSmemA(half *smem, half *A, int M, int K, int ko)
 {
@@ -37,10 +39,11 @@ __device__ void loadSmemA(half *smem, half *A, int M, int K, int ko)
     }
 }
 
-__device__ void loadSmemB(half *smem, half *B, int N, int K, int ko)
+__device__ void loadSmemB(half *smem, half *B, int N, int K, int ko, int N_index)
 {
     // load 128 * 32
     int bx = blockIdx.x;
+    bx = N_index; // 新的代码写法下，每次的位置是N_index，而grid.x始终等于1
     int tx = threadIdx.x;
     int ty = threadIdx.y;
     int tz = threadIdx.z;
@@ -53,7 +56,23 @@ __device__ void loadSmemB(half *smem, half *B, int N, int K, int ko)
         smem[row / 16 * (2 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16] = B[(bx * 128 + row) * K + ko * KI + col];
     } // B是K*N。。。。奇怪，真的可以这样（行数*列宽+列数）来访问吗？
 }
-
+// __device__ void loadSmemB(half *smem, half *B, int N, int K, int ko, int N_index)
+// {
+//     // load 128 * 32
+//     int bx = blockIdx.x;
+//     // bx = N_index; // 新的代码写法下，每次的位置是N_index，而grid.x始终等于1
+//     int tx = threadIdx.x;
+//     int ty = threadIdx.y;
+//     int tz = threadIdx.z;
+//     int tid = tz * 64 + ty * 32 + tx;
+//     for (int i = 0; i < 32; ++i)
+//     {
+//         int row = i * 4 + tid / 32;
+//         int col = tid % 32;
+//         // layout: [row_out, col_out, row_in, col_in] = [8, 2, 16, 16]
+//         smem[row / 16 * (2 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16] = B[(bx * 128 + row) * K + ko * KI + col];
+//     } // B是K*N。。。。奇怪，真的可以这样（行数*列宽+列数）来访问吗？
+// }
 
 
 __device__ void loadSmemB_new(half *smem, half *B, int N, int K, int ko, int bx_iter)
@@ -74,30 +93,11 @@ __device__ void loadSmemB_new(half *smem, half *B, int N, int K, int ko, int bx_
 }
 
 
-
-
-// __device__ void loadSmemC(float *smem, half *C, int M, int N)
-// {
-//     // load 128 * 128
-//     int bx = blockIdx.x;
-//     int by = blockIdx.y;
-//     int tx = threadIdx.x;
-//     int ty = threadIdx.y;
-//     int tz = threadIdx.z;
-//     int tid = tz * 64 + ty * 32 + tx;
-//     for (int i = 0; i < 128; ++i)
-//     {
-//         int row = i;
-//         int col = tid;
-//         // layout: [row_out, col_out, row_in, col_in] = [8, 8, 16, 16]
-//         smem[row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16] = (float)(C[(by * 128 + row) * N + bx * 128 + col]);
-//     }
-// }
-
-__device__ void loadSmemC(float *smem, half *C, int M, int N)
+__device__ void loadSmemC(half *smem, half *C, int new_M, int new_N, int T_index)
 {
     // load 128 * 128
     int bx = blockIdx.x;
+    bx = T_index;
     int by = blockIdx.y;
     int tx = threadIdx.x;
     int ty = threadIdx.y;
@@ -108,11 +108,43 @@ __device__ void loadSmemC(float *smem, half *C, int M, int N)
         int row = i;
         int col = tid;
         // layout: [row_out, col_out, row_in, col_in] = [8, 8, 16, 16]
-        smem[row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16] = (half)(C[(by * 128 + row) * N + bx * 128 + col]);
+        // for(i=0;i<128;i++){
+        //     for(int j=0;j<128;j++){
+        //         smem[i*128+j]=half((i*128+j));
+        //     }
+        // }
+        smem[row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16] = (half)(C[(by * 128 + row) * new_N + bx * 128 + col]);
     }
 }
 
+// __device__ void loadFragC(nvcuda::wmma::fragment<nvcuda::wmma::accumulator, wmmaM, wmmaN, wmmaK, half> *frag, half *smem)
+// {
+//     // load 128*128 C是row-major
+//     for (int mii = 0; mii < MII / wmmaM; mii += 1)
+//     { // MII/wmmaM=64/16=4
+//         for (int nii = 0; nii < NII / wmmaN; nii += 1)
+//         {
+//             // nvcuda::wmma::load_matrix_sync(frag[mii * (NII / wmmaN) + nii], smem + mii * (8 * 16 * 16) + nii * (16 * 16), 16*16, C_LAYOUT);
+//             nvcuda::wmma::load_matrix_sync(frag[mii * (NII / wmmaN) + nii], smem + mii * (8 * 16 * 16) + nii * (16 * 16), 128, C_LAYOUT);
+//         }
+//     }
+// }
 
+__device__ void loadFragC(nvcuda::wmma::fragment<nvcuda::wmma::accumulator, wmmaM, wmmaN, wmmaK, half> *frag, half *smem)
+{
+    int ty = threadIdx.y;
+    int tz = threadIdx.z;
+    // load 128*128 C是row-major
+    for (int mii = 0; mii < MII / wmmaM; mii += 1)
+    {
+        for (int nii = 0; nii < NII / wmmaN; nii += 1)
+        {
+            int row = tz * 64 + mii * 16;
+            int col = ty * 64 + nii * 16;
+            nvcuda::wmma::load_matrix_sync(frag[mii * (NII / wmmaN) + nii], smem + row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16), 16, C_LAYOUT);
+        }
+    }
+}
 
 // __device__ void storeSmemC(half *C, float *smem, int M, int N)
 // {
@@ -131,10 +163,28 @@ __device__ void loadSmemC(float *smem, half *C, int M, int N)
 //         (C[(by * 128 + row) * N + bx * 128 + col]) = (half)smem[row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16];
 //     }
 // }
-__device__ void storeSmemC(half *C, half *smem, int M, int N)
+// __device__ void storeSmemC(half *C, half *smem, int M, int N)
+// {
+//     // load 128 * 128
+//     int bx = blockIdx.x;
+//     int by = blockIdx.y;
+//     int tx = threadIdx.x;
+//     int ty = threadIdx.y;
+//     int tz = threadIdx.z;
+//     int tid = tz * 64 + ty * 32 + tx;
+//     for (int i = 0; i < 128; ++i)
+//     {
+//         int row = i;
+//         int col = tid;
+//         // layout: [row_out, col_out, row_in, col_in] = [8, 8, 16, 16]
+//         (C[(by * 128 + row) * N + bx * 128 + col]) = smem[row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16]; // 取消了half
+//     }
+// }
+__device__ void storeSmemC(half *C, half *smem, int M, int N, int N_ind)
 {
     // load 128 * 128
     int bx = blockIdx.x;
+    bx = N_ind;
     int by = blockIdx.y;
     int tx = threadIdx.x;
     int ty = threadIdx.y;
@@ -148,7 +198,6 @@ __device__ void storeSmemC(half *C, half *smem, int M, int N)
         (C[(by * 128 + row) * N + bx * 128 + col]) = smem[row / 16 * (8 * 16 * 16) + col / 16 * (16 * 16) + row % 16 * 16 + col % 16]; // 取消了half
     }
 }
-
 
 __device__ void storeSmemC_new(half *C, half *smem, int M, int N, int bx_iter)
 {
@@ -176,7 +225,7 @@ __device__ void loadFragA(nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, wmmaM, 
     for (int i = 0; i < 4; ++i)
     {
         int row = tz * 64 + i * 16;
-        int col = ki * KII;
+        int col = ki * KII; // ki=0或者1，col=0或者16
         nvcuda::wmma::load_matrix_sync(frag[i], smem + row / 16 * (2 * 16 * 16) + col / 16 * (16 * 16), 16);
     }
 }
@@ -262,47 +311,12 @@ __global__ void matmul(half *A, half *B, half *C, half *gemm1_result, half *gemm
     // nvcuda::wmma::fragment<nvcuda::wmma::accumulator, wmmaM, wmmaN, wmmaK, float> Accum[MII / wmmaM * NII / wmmaN];
     nvcuda::wmma::fragment<nvcuda::wmma::accumulator, wmmaM, wmmaN, wmmaK, half> Accum[MII / wmmaM * NII / wmmaN];
 
-    for (int mii = 0; mii < MII / wmmaM; mii += 1)
-    {
-        for (int nii = 0; nii < NII / wmmaN; nii += 1)
-        {
-            nvcuda::wmma::fill_fragment(Accum[mii * (NII / wmmaN) + nii], 0.0);
-        }
-    }
-    for (int ko = 0; ko < K / KI; ko += 1)
-    {
-        loadSmemA(SA, A, M, K, ko);
-        loadSmemB(SB, B, N, K, ko); // 正常的B是K*N，这里反着写（可能是因为col-major)
-        __syncthreads();
-        for (int ki = 0; ki < KI / KII; ki += 1)
-        {
-            // 64x64x16 mma for each warp
-            loadFragA(FragA, SA, ki);
-            loadFragB(FragB, SB, ki);
-            for (int mii = 0; mii < MII / wmmaM; mii += 1)
-            {
-                for (int nii = 0; nii < NII / wmmaN; nii += 1)
-                {
-                    // 16x16x16 for each wmma
-                    nvcuda::wmma::mma_sync(Accum[mii * (NII / wmmaN) + nii], FragA[mii], FragB[nii], Accum[mii * (NII / wmmaN) + nii]);
-                }
-            }
-        }
-    }
-    storeAccum(SC, Accum);
-    __syncthreads();
-    storeSmemC(C, SC, M, N);
 
 
+    for(int N_iter=0;N_iter<N/NI;N_iter+=1){
+// 自从N_iter的引入，每个block就负责一整行了。也就是loadSmemB要修改了。
 
 
-
-
-
-// 先做假设，GEMM0的N恰好等于128，不会有多次。之后再逐渐加入多次计算。
-    for(int T_iter = 0; T_iter < T/NI; T_iter++){
-
-        // 真的有必要重新置零一次吗。。。不过以防万一吧。
         for (int mii = 0; mii < MII / wmmaM; mii += 1)
         {
             for (int nii = 0; nii < NII / wmmaN; nii += 1)
@@ -311,17 +325,17 @@ __global__ void matmul(half *A, half *B, half *C, half *gemm1_result, half *gemm
             }
         }
 
-    // 还要加一层。对于一块gemm0_result，需要对所有gemm1相关的行都乘一遍。比如T等于256的时候就需要向右再算一次。
+
         for (int ko = 0; ko < K / KI; ko += 1)
-        { // K/KI=（比如512）/32
-            // loadSmemA(SA, A, M, K, ko); // 不需要了。就是上一步的SC
-            loadSmemB_new(S_gemm1_weight, gemm1_weight, T, N, ko, T_iter);
+        {
+            loadSmemA(SA, A, M, K, ko);
+            loadSmemB(SB, B, N, K, ko, N_iter); // 正常的B是K*N，这里反着写（可能是因为col-major)
             __syncthreads();
             for (int ki = 0; ki < KI / KII; ki += 1)
-            { // KI/KII=32/16=2
+            {  // KI/KII=32/16=2
                 // 64x64x16 mma for each warp
-                loadFragA_new(FragA, SC, ko*KI+ki*KII); // 和之前的loadFragA不同，这里传入的第三个参量是当前真实的col位置
-                loadFragB(FragB, S_gemm1_weight, ki);
+                loadFragA(FragA, SA, ki);// ki=0或者1
+                loadFragB(FragB, SB, ki);
                 for (int mii = 0; mii < MII / wmmaM; mii += 1)
                 {
                     for (int nii = 0; nii < NII / wmmaN; nii += 1)
@@ -332,11 +346,125 @@ __global__ void matmul(half *A, half *B, half *C, half *gemm1_result, half *gemm
                 }
             }
         }
-
-
-
-        storeAccum(S_gemm1_result, Accum); 
+        storeAccum(SC, Accum);
         __syncthreads();
-        storeSmemC_new(gemm1_result, S_gemm1_result, M, T, T_iter);
+        storeSmemC(C, SC, M, N, N_iter); // 以后可以注释掉。现在留着是为了debug
+    // =============================    GEMM1    ========================
+    // 先做假设，GEMM0的N恰好等于128，不会有多次。之后再逐渐加入多次计算。
+        for(int T_iter = 0; T_iter < T/NI; T_iter++){
+            // 如果N比128大。我们先不考虑cluster。那么就需要多次回到global再回SMEM了。
+
+            if(N_iter>=1){
+                loadSmemC(S_gemm1_result, gemm1_result, M, T, T_iter);
+                __syncthreads();
+                if(blockIdx.x==0&&blockIdx.y==0&&blockIdx.z==0&&threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0){
+                    printf("loadSmemC. T_iter=%d\n", T_iter);
+                    for(int kk=0;kk<64;kk++){
+                        for(int tt=0;tt<256;tt++){
+                            printf("%f  ", float(S_gemm1_result[kk*256+tt]));
+                        } // 连续256个是16*16的块。64是8*8个整块
+                        printf("\n");
+                    }
+                    printf("\n");
+                }
+                loadFragC(Accum, S_gemm1_result);
+            }
+            else{
+            // 这里需要重新置零的！之前GEMM0的结果还存在里面呢！
+                for (int mii = 0; mii < MII / wmmaM; mii += 1)
+                {
+                    for (int nii = 0; nii < NII / wmmaN; nii += 1)
+                    {
+                        nvcuda::wmma::fill_fragment(Accum[mii * (NII / wmmaN) + nii], 0.0);
+                    }
+                }
+            }
+
+            // for (int mii = 0; mii < MII / wmmaM; mii += 1)
+            // {
+            //     for (int nii = 0; nii < NII / wmmaN; nii += 1)
+            //     {
+            //         nvcuda::wmma::fill_fragment(Accum[mii * (NII / wmmaN) + nii], 0.0);
+            //     }
+            // }
+
+
+        // 还要加一层。对于一块gemm0_result，需要对所有gemm1相关的行都乘一遍。比如T等于256的时候就需要向右再算一次。
+            for (int k_gemm1_o = 0; k_gemm1_o < NI / KI; k_gemm1_o += 1)
+            { // GEMM0是对K迭代。GEMM1就是对N迭代。但是还是按照KI和KII的尺寸来。我们此处无法迭代到底。只能迭代NI/KI次。是根据GEMM0的中间结果尺寸决定的。
+                int k_gemm1_o_iter = N_iter*(NI/KI)+k_gemm1_o;
+                // loadSmemA(SA, A, M, K, k_gemm1_o); // 不需要了。就是上一步的SC
+                loadSmemB_new(S_gemm1_weight, gemm1_weight, T, N, k_gemm1_o_iter, T_iter);  // 形状是N*T，所以此处写成T, N
+                __syncthreads();
+                if(blockIdx.x==0&&blockIdx.y==0&&blockIdx.z==0&&threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0&&k_gemm1_o==0){
+                    printf("loadSmemB_new\n");
+                    for(int kk=0;kk<128;kk++){
+                        printf("%f  ", float(S_gemm1_weight[kk]));
+                    }
+                    printf("\n");
+                }
+                for (int ki = 0; ki < KI / KII; ki += 1)
+                { // KI/KII=32/16=2
+                    // 64x64x16 mma for each warp
+                    loadFragA_new(FragA, SC, k_gemm1_o*KI+ki*KII); // 和之前的loadFragA不同，这里传入的第三个参量是当前真实的col位置，以及，这里要用k_gemm1_o而不是k_gemm1_o_iter，因为是在SC内部而不是去外部--[0,4)*32+[0,2)*16=
+                    loadFragB(FragB, S_gemm1_weight, ki);
+                    for (int mii = 0; mii < MII / wmmaM; mii += 1)
+                    {
+                        for (int nii = 0; nii < NII / wmmaN; nii += 1)
+                        {
+                            // 16x16x16 for each wmma
+                            nvcuda::wmma::mma_sync(Accum[mii * (NII / wmmaN) + nii], FragA[mii], FragB[nii], Accum[mii * (NII / wmmaN) + nii]);
+                        }
+                    }
+                }
+            }
+
+
+
+            // for (int ko = 0; ko < K / KI; ko += 1)
+            // { // GEMM0是对K迭代。GEMM1就是对N迭代。
+            //     // loadSmemA(SA, A, M, K, ko); // 不需要了。就是上一步的SC
+            //     loadSmemB_new(S_gemm1_weight, gemm1_weight, T, N, ko, T_iter);  // 形状是N*T，所以此处写成T, N
+            //     __syncthreads();
+            //     if(blockIdx.x==0&&blockIdx.y==0&&blockIdx.z==0&&threadIdx.x==0&&threadIdx.y==0&&threadIdx.z==0&&ko==0){
+            //         printf("loadSmemB_new\n");
+            //         for(int kk=0;kk<128;kk++){
+            //             printf("%f  ", float(S_gemm1_weight[kk]));
+            //         }
+            //         printf("\n");
+            //     }
+            //     for (int ki = 0; ki < KI / KII; ki += 1)
+            //     { // KI/KII=32/16=2
+            //         // 64x64x16 mma for each warp
+            //         loadFragA_new(FragA, SC, ko*KI+ki*KII); // 和之前的loadFragA不同，这里传入的第三个参量是当前真实的col位置
+            //         loadFragB(FragB, S_gemm1_weight, ki);
+            //         for (int mii = 0; mii < MII / wmmaM; mii += 1)
+            //         {
+            //             for (int nii = 0; nii < NII / wmmaN; nii += 1)
+            //             {
+            //                 // 16x16x16 for each wmma
+            //                 nvcuda::wmma::mma_sync(Accum[mii * (NII / wmmaN) + nii], FragA[mii], FragB[nii], Accum[mii * (NII / wmmaN) + nii]);
+            //             }
+            //         }
+            //     }
+            // }
+            
+            
+            storeAccum(S_gemm1_result, Accum); 
+            __syncthreads();
+            storeSmemC_new(gemm1_result, S_gemm1_result, M, T, T_iter);
+            // if(N_iter==0){
+            //     storeSmemC_new(gemm1_result, S_gemm1_result, M, T, T_iter);
+            // }
+
+        }
+
+
+
+
+
     }
+
+
+
 }
