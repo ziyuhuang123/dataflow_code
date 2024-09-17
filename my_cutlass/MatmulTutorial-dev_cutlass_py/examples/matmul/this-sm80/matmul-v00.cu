@@ -181,14 +181,15 @@ __device__ void loadFragA(nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, wmmaM, 
     }
 }
 
-__device__ void loadFragA_new(nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, wmmaM, wmmaN, wmmaK, half, nvcuda::wmma::row_major> *frag, half *smem, int ki)
+__device__ void loadFragA_new(nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, wmmaM, wmmaN, wmmaK, half, nvcuda::wmma::row_major> *frag, half *smem, int col_ind)
 {
     // load 64x16
     int tz = threadIdx.z;
     for (int i = 0; i < 4; ++i)
     {
         int row = tz * 64 + i * 16;
-        int col = ki * KII; // KII=16
+        // int col = ki * KII; // KII=16
+        int col=col_ind;
         // nvcuda::wmma::load_matrix_sync(frag[i], smem + row / 16 * (2 * 16 * 16) + col / 16 * (16 * 16), 16);
         nvcuda::wmma::load_matrix_sync(frag[i], smem + row / 16 * (128 * 16)  // 这里之前是32，现在改成128是因为C的一列宽度是128
         + col / 16 * (16 * 16), 16); // 这里的row和col都是C矩阵意义上的位置，而要加到smem指针上，则要考虑真实的步长，比如col这里，增加一个16*16的col向右，从C来看只需要加16即可，但是smem是走完左侧的16*16之后，才能到右侧的col位置上。不过这一点对C_smem是不变的。不过在调用loadFragA_new的地方需要相应修改传入的ki。
@@ -240,7 +241,7 @@ __device__ void storeAccum(half *ptr, nvcuda::wmma::fragment<nvcuda::wmma::accum
     }
 }
 
-__global__ void matmul(half *A, half *B, half *gemm1_result, half *gemm1_weight, int M, int N, int K, int T, float alpha, float beta)
+__global__ void matmul(half *A, half *B, half *C, half *gemm1_result, half *gemm1_weight, int M, int N, int K, int T, float alpha, float beta)
 { // 中间结果彻底不需要存出去了。每次都完全利用干净。gemm1_weight的尺寸是N*T（col-major)
     // A is row-major
     // B is col-major
@@ -253,7 +254,7 @@ __global__ void matmul(half *A, half *B, half *gemm1_result, half *gemm1_weight,
     // float *SC = reinterpret_cast<float *>(shared_storage);
     half *SC = reinterpret_cast<half *>(shared_storage); // 128*128*2/1024=32KB
     half *S_gemm1_weight = reinterpret_cast<half *>(shared_storage + MI * NI * sizeof(half)); // 128*32*2/1024=8KB---最大空间是40KB
-    half *S_gemm1_result = reinterpret_cast<half *>(shared_storage + MI * NI * sizeof(half)); // 这个是得接在SC的结果之后。但是可以服用gemm1_weight的空间
+    half *S_gemm1_result = reinterpret_cast<half *>(shared_storage + (MI * NI+MI*KI) * sizeof(half)); // 这个是得接在SC的结果之后。但是可以服用gemm1_weight的空间
 
 
     nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, wmmaM, wmmaN, wmmaK, half, nvcuda::wmma::row_major> FragA[MII / wmmaM];
@@ -290,6 +291,7 @@ __global__ void matmul(half *A, half *B, half *gemm1_result, half *gemm1_weight,
     }
     storeAccum(SC, Accum);
     __syncthreads();
+    storeSmemC(C, SC, M, N);
 
 
 
@@ -297,20 +299,17 @@ __global__ void matmul(half *A, half *B, half *gemm1_result, half *gemm1_weight,
 
 
 
-    // 真的有必要重新置零一次吗。。。不过以防万一吧。
-    for (int mii = 0; mii < MII / wmmaM; mii += 1)
-    {
-        for (int nii = 0; nii < NII / wmmaN; nii += 1)
-        {
-            nvcuda::wmma::fill_fragment(Accum[mii * (NII / wmmaN) + nii], 0.0);
-        }
-    }
 // 先做假设，GEMM0的N恰好等于128，不会有多次。之后再逐渐加入多次计算。
-
-
     for(int T_iter = 0; T_iter < T/NI; T_iter++){
 
-
+        // 真的有必要重新置零一次吗。。。不过以防万一吧。
+        for (int mii = 0; mii < MII / wmmaM; mii += 1)
+        {
+            for (int nii = 0; nii < NII / wmmaN; nii += 1)
+            {
+                nvcuda::wmma::fill_fragment(Accum[mii * (NII / wmmaN) + nii], 0.0);
+            }
+        }
 
     // 还要加一层。对于一块gemm0_result，需要对所有gemm1相关的行都乘一遍。比如T等于256的时候就需要向右再算一次。
         for (int ko = 0; ko < K / KI; ko += 1)

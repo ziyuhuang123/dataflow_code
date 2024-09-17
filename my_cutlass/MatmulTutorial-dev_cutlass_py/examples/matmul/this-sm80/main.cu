@@ -12,7 +12,7 @@ int MULTI_THREADING = 1;
 int ITERS = 1;
 
 // extern __global__ void matmul(half *A, half *B, half *C, int M, int N, int K, float alpha, float beta);
-extern __global__ void matmul(half *A, half *B, half *gemm1_result, half *gemm1_weight, int M, int N, int K, int T, float alpha, float beta);
+extern __global__ void matmul(half *A, half *B, half *C, half *gemm1_result, half *gemm1_weight, int M, int N, int K, int T, float alpha, float beta);
 
 
 
@@ -104,8 +104,9 @@ int main(int argc, char *argv[])
     {
         for (int j = 0; j < K; ++j)
         {
-            hA[i * K + j] = (half)(rand() % 1000 * 1 / 100 % 10 + 0.0);
+            hA[i * K + j] = (half)((rand() % 1000 * 1 / 100 % 10 + 0.0)*1e-3);
             // hA[i * K + j] = (half)((i*K+j));
+            // hA[i * K + j] = (half)(1e-3);
         }
         for (int j = 0; j < N; ++j)
         {
@@ -123,9 +124,9 @@ int main(int argc, char *argv[])
     {
         for (int n = 0; n < N; ++n)
         {
-            hB[n * K + k] = (half)(rand() % 1000 * 1 / 100 % 10 + 0.0);
+            hB[n * K + k] = (half)((rand() % 1000 * 1 / 100 % 10 + 0.0)*1e-3);
             // hB[n * K + k] = (half)((n * K + k)*1e-3);
-            // hB[n * K + k] = (half)(1);
+            // hB[n * K + k] = (half)(1e-3);
         } // K*N
     }
 
@@ -134,7 +135,8 @@ int main(int argc, char *argv[])
     {
         for (int t = 0; t < T; ++t)
         {
-            h_gemm1_weight[t * N + n] = (half)(rand() % 1000 * 1 / 100 % 10 + 0.0); 
+            h_gemm1_weight[t * N + n] = (half)((rand() % 1000 * 1 / 100 % 10 + 0.0)*1e-3);
+            // h_gemm1_weight[t * N + n] = (half)(1);
         } // N*T
     }
 
@@ -231,14 +233,14 @@ int main(int argc, char *argv[])
     CUDA_CHECK(cudaMemcpy(dB, hB, K * N * 2, cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(dC, hC, M * N * 2, cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_gemm1_weight, h_gemm1_weight, T * N * 2, cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_gemm1_result, h_gemm1_result, M * N * 2, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_gemm1_result, h_gemm1_result, M * T * 2, cudaMemcpyHostToDevice));
 
     dim3 dimBlock(32, 2 * MULTI_THREADING, 2);
-    // dim3 dimGrid(N / 128, M / 128);
-    dim3 dimGrid(1, M / 128); // 增加这个是因为T维度上只需要一个block
+    dim3 dimGrid(N / 128, M / 128);
+    // dim3 dimGrid(1, M / 128); // 增加这个是因为T维度上只需要一个block
 
 #ifndef DEBUG
-    int smem_size = MAX(STAGES * 128 * 32 * 2 * 2, 128 * 128 * 2+128 * 128 * 2);// 需要同时存GEMM0的结果和GEMM1的结果。读GEMM1的SMEM也许不需要那么大，以后可以reuse。
+    int smem_size = MAX(STAGES * 128 * 32 * 2 * 2, 128 * 128 * 2+128 * 128 * 2+128*32*2);// 需要同时存GEMM0的结果和GEMM1的结果。读GEMM1的SMEM也许不需要那么大，以后可以reuse。
     if (smem_size >= (48 << 10))
     {
         CUDA_CHECK(cudaFuncSetAttribute(matmul,
@@ -337,7 +339,7 @@ int main(int argc, char *argv[])
 
 
 
-    int smem_size = MAX(STAGES * 128 * 32 * 2 * 2, 128 * 128 * 2+128*32*2);// 这里增加了GEMM1的权重的空间
+    int smem_size = MAX(STAGES * 128 * 32 * 2 * 2, 128 * 128 * 2+128 * 128 * 2+128*32*2);// 这里增加了GEMM1的权重的空间
     std::cout << "Using shared memory = " << (double)smem_size / 1e3 << " KB.\n";
     if (smem_size >= (48 << 10))
     {
@@ -346,36 +348,42 @@ int main(int argc, char *argv[])
                                         smem_size));
     }
     std::cout << "Computing result values...\n";
-    // matmul<<<dimGrid, dimBlock, smem_size, nullptr>>>(dA, dB, dC, M, N, K, alpha, beta);
-
-  dim3 cluster(1, 2, 1);
-    void* kernel_params[] = {
-        (void*)&dA, (void*)&dB, (void*)&d_gemm1_result, (void*)&d_gemm1_weight,
-        (void*)&M, (void*)&N, (void*)&K, (void*)&T,
-        (void*)&alpha, (void*)&beta
-    };
-  cudaLaunchConfig_t launch_config;
-  launch_config.gridDim = dimGrid;
-  launch_config.blockDim = dimBlock;
-  launch_config.dynamicSmemBytes = smem_size;
-  launch_config.stream = nullptr;
-
-  cudaLaunchAttribute launch_attribute[1];
-  launch_attribute[0].id = cudaLaunchAttributeClusterDimension;
-  launch_attribute[0].val.clusterDim.x = cluster.x;
-  launch_attribute[0].val.clusterDim.y = cluster.y;
-  launch_attribute[0].val.clusterDim.z = cluster.z;
-
-  launch_config.attrs = launch_attribute;
-  launch_config.numAttrs = 1;
-  void const* Matmul = (void const*)matmul;
-  cudaError_t status = cudaFuncSetAttribute(
-      Matmul, cudaFuncAttributeNonPortableClusterSizeAllowed, 1);
-  CUDA_CHECK(status);
-
-    CUDA_CHECK(cudaGetLastError());
+    matmul<<<dimGrid, dimBlock, smem_size, nullptr>>>(dA, dB, dC, d_gemm1_result,d_gemm1_weight, M, N, K, T, alpha, beta);
     std::cout << "Computing results done!\n";
     CUDA_CHECK(cudaMemcpy(h_gemm1_result, d_gemm1_result, M * T * 2, cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(hC, dC, M * N * 2, cudaMemcpyDeviceToHost));
+
+
+//   dim3 cluster(1, 2, 1);
+//     void* kernel_params[] = {
+//         (void*)&dA, (void*)&dB, (void*)&d_gemm1_result, (void*)&d_gemm1_weight,
+//         (void*)&M, (void*)&N, (void*)&K, (void*)&T,
+//         (void*)&alpha, (void*)&beta
+//     };
+//   cudaLaunchConfig_t launch_config;
+//   launch_config.gridDim = dimGrid;
+//   launch_config.blockDim = dimBlock;
+//   launch_config.dynamicSmemBytes = smem_size;
+//   launch_config.stream = nullptr;
+
+//   cudaLaunchAttribute launch_attribute[1];
+//   launch_attribute[0].id = cudaLaunchAttributeClusterDimension;
+//   launch_attribute[0].val.clusterDim.x = cluster.x;
+//   launch_attribute[0].val.clusterDim.y = cluster.y;
+//   launch_attribute[0].val.clusterDim.z = cluster.z;
+
+//   launch_config.attrs = launch_attribute;
+//   launch_config.numAttrs = 1;
+//   void const* Matmul = (void const*)matmul;
+//   cudaError_t status = cudaFuncSetAttribute(
+//       Matmul, cudaFuncAttributeNonPortableClusterSizeAllowed, 1);
+//   CUDA_CHECK(status);
+
+//     status = cudaLaunchKernelExC(&launch_config, Matmul, kernel_params);
+
+//     CUDA_CHECK(cudaGetLastError());
+//     std::cout << "Computing results done!\n";
+//     CUDA_CHECK(cudaMemcpy(h_gemm1_result, d_gemm1_result, M * T * 2, cudaMemcpyDeviceToHost));
 
 
 
@@ -385,9 +393,9 @@ int main(int argc, char *argv[])
     std::cout << "Golden:" << std::endl;
     for (int i = 0; i < M; ++i)
     {
-        for (int j = 0; j < N; ++j)
+        for (int j = 0; j < T; ++j)
         {
-            std::cout << (float)golden[i * N + j] << " ";
+            std::cout << (float)golden1[i * T + j] << " ";
         }
         std::cout << std::endl;
     }
@@ -395,9 +403,9 @@ int main(int argc, char *argv[])
     std::cout << "Results:" << std::endl;
     for (int i = 0; i < M; ++i)
     {
-        for (int j = 0; j < N; ++j)
+        for (int j = 0; j < T; ++j)
         {
-            std::cout << (float)hC[i * N + j] << " ";
+            std::cout << (float)h_gemm1_result[i * T + j] << " ";
         }
         std::cout << std::endl;
     }
@@ -413,7 +421,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    int errors = 0;
+    int errors0 = 0;
     for (int i = 0; i < M; ++i)
     {
         for (int j = 0; j < N; ++j)
@@ -430,10 +438,34 @@ int main(int argc, char *argv[])
             }
             if (diff / maxv > 1e-2)
             {
+                errors0 += 1;
+            }
+        }
+    }
+
+
+    int errors = 0;
+    for (int i = 0; i < M; ++i)
+    {
+        for (int j = 0; j < N; ++j)
+        {
+            float diff = ((float)golden[i * N + j] - (float)hC[i * N + j]);
+            if (diff < 0)
+            {
+                diff = -diff;
+            }
+            float maxv = MAX((float)golden[i * N + j], (float)hC[i * N + j]);
+            if (maxv < 0)
+            {
+                maxv = -maxv;
+            }
+            if (diff / maxv > 1e-2)
+            {
                 errors += 1;
             }
         }
     }
+
 
     if (errors)
     {
@@ -441,7 +473,17 @@ int main(int argc, char *argv[])
     }
     else
     {
-        std::cout << "Correctness Check Passed!\n";
+        std::cout << "GEMM0 Correctness Check Passed!\n";
+    }
+
+
+    if (errors0)
+    {
+        std::cout << "Wrong Answer gemm1! " << errors0 << " errors.\n";
+    }
+    else
+    {
+        std::cout << "GEMM1 Correctness Check Passed!\n";
     }
 #endif
 
