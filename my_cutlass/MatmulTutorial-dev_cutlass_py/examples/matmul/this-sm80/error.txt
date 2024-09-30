@@ -1,0 +1,1 @@
+nvcc error   : 'ptxas' died due to signal 2 
